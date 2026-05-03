@@ -36,3 +36,4 @@ If this direction holds up in playtests, convert the runtime sprites into author
 - 4 directions minimum; 8 directions preferred.
 - Keep the same visual language: clean sci-fi containment gear, readable light tools, original shapes.
 - Export each production sheet as `*.atlas.json` plus a transparent PNG, then add it to `assets/characters/runtime-character-manifest.json`.
+- Use `npm run assets:brief` before generating or commissioning new sheets so frame size, grid, anchor, and negative prompts stay consistent.

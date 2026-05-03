@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "briefs": [
+    {
+      "id": "investigator-production-atlas",
+      "role": "investigator",
+      "status": "planned",
+      "targetAtlas": "assets/characters/investigator-production.atlas.json",
+      "targetImage": "assets/characters/investigator-production-atlas.png",
+      "frame": { "width": 128, "height": 128 },
+      "grid": { "columns": 4, "rows": 8 },
+      "anchor": { "x": 64, "y": 96 },
+      "directions": ["south", "southEast", "east", "northEast", "north", "northWest", "west", "southWest"],
+      "animations": ["idle", "walk", "light", "downed", "revive"],
+      "direction": "Original paranormal containment technicians with compact backpacks, readable flashlight tools, strong silhouettes, and suit color variants. Keep them top-down three-quarter, TV-readable, and legally distinct from any existing game characters."
+    },
+    {
+      "id": "anomaly-production-atlas",
+      "role": "anomaly",
+      "status": "ready",
+      "targetAtlas": "assets/characters/anomaly-ghost.atlas.json",
+      "targetImage": "assets/characters/anomaly-ghost-atlas.png",
+      "frame": { "width": 128, "height": 128 },
+      "grid": { "columns": 4, "rows": 9 },
+      "anchor": { "x": 64, "y": 94 },
+      "directions": ["south", "southEast", "east", "northEast", "north", "northWest", "west", "southWest"],
+      "animations": ["idle", "revealed"],
+      "direction": "Current approved spectral anomaly atlas. Future passes should preserve a soft translucent body, clear facial read, strong cyan glow, and hidden/revealed opacity language."
+    }
+  ]
+}

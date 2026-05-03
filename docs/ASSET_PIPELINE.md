@@ -13,6 +13,14 @@ The runtime should only load game-ready transparent atlases plus JSON metadata. 
 Run:
 
 ```sh
+npm run assets:brief
+```
+
+This writes `dist/assets/character-art-brief.json` and `.md` from `assets/characters/character-art-briefs.json`, including prompt direction, negative prompts, exact atlas dimensions, anchors, and handoff checks.
+
+Run:
+
+```sh
 npm run assets:audit
 ```
 
@@ -22,6 +30,7 @@ This writes `dist/assets/art-asset-audit.json` and `.md`, listing every characte
 
 - `assets/characters/runtime-character-manifest.json` lists the atlases allowed into packaged builds.
 - `assets/characters/*.atlas.json` defines one validated runtime atlas.
+- `assets/characters/character-art-briefs.json` tracks planned production sprite sheets before they enter runtime.
 - Generated sheets that still have white/RGB backgrounds stay in `sourceOnlyAssets` and are not loaded by the game.
 
 ## Required Character Atlas Manifest
