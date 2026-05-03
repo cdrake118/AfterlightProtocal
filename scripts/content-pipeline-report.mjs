@@ -39,6 +39,7 @@ const output = {
     audioTotal: reports.audio?.summary?.totalSlots ?? 0
   },
   risks: makeRisks(reports),
+  nextActions: makeNextActions(reports),
   reports: Object.fromEntries(Object.entries(reports).map(([key, value]) => [key, Boolean(value)]))
 };
 
@@ -90,8 +91,101 @@ function makeRisks(data) {
   return risks;
 }
 
+function makeNextActions(data) {
+  const actions = [];
+  const art = data.characterArt?.summary;
+  const runtimeAtlases = data.characterRuntimeManifest?.runtimeAtlases?.length ?? 0;
+  const investigatorBrief = data.characterBriefs?.briefs?.find((brief) => brief.id === "investigator-production-atlas");
+  const mapArt = data.mapArt?.summary;
+  const audio = data.audio?.summary;
+  const maps = data.mapValidation?.summary;
+  const mapLayout = data.mapLayout?.summary;
+
+  if (art && art.productionReady < 2) {
+    actions.push({
+      priority: "P0",
+      area: "Character Art",
+      action: "Produce one validated investigator runtime atlas so phone players no longer rely on source-only generated sheets.",
+      command: "npm run assets:review",
+      doneWhen: "The investigator PNG is transparent, has matching atlas JSON, appears in runtime-character-manifest.json, and atlas previews show clean feet/anchors.",
+      source: investigatorBrief?.targetAtlas ?? "assets/characters/character-art-briefs.json"
+    });
+  } else if (runtimeAtlases < 2) {
+    actions.push({
+      priority: "P0",
+      area: "Character Art",
+      action: "Add the validated investigator atlas to the runtime manifest.",
+      command: "npm run assets:review",
+      doneWhen: "Runtime atlas count includes anomaly plus investigator.",
+      source: "assets/characters/runtime-character-manifest.json"
+    });
+  }
+
+  if (mapArt && mapArt.ready === 0 && mapArt.planned > 0) {
+    actions.push({
+      priority: "P0",
+      area: "Map Art",
+      action: "Render the Manor party-test background plate and wire it as a local Tiled image layer.",
+      command: "npm run maps:review",
+      doneWhen: "map-art audit reports one ready plate and the Tiled preview shows image art under collision/spawn overlays.",
+      source: "assets/maps/map-art-manifest.json"
+    });
+  }
+
+  if (audio && audio.missing > 0) {
+    actions.push({
+      priority: "P1",
+      area: "Audio",
+      action: "Fill the required music/SFX files from the audio production brief.",
+      command: "npm run audio:review",
+      doneWhen: "audio audit reports 14/14 runtime files ready.",
+      source: "dist/assets/audio-brief.md"
+    });
+  }
+
+  if (maps && maps.errors > 0) {
+    actions.push({
+      priority: "P0",
+      area: "Map Editor",
+      action: "Fix blocking Tiled map validation errors before party testing.",
+      command: "npm run maps:validate",
+      doneWhen: "map validation reports zero errors.",
+      source: "dist/maps/tiled-map-validation.md"
+    });
+  }
+
+  if (mapLayout && mapLayout.totalWarnings > 0) {
+    actions.push({
+      priority: "P1",
+      area: "Map Design",
+      action: "Review non-blocking map layout warnings for spawn spread, sightlines, battery access, and coverage.",
+      command: "npm run maps:layout",
+      doneWhen: "warnings are either fixed or accepted for playtest.",
+      source: "dist/maps/map-layout-audit.md"
+    });
+  }
+
+  if (!actions.length) {
+    actions.push({
+      priority: "P2",
+      area: "Content QA",
+      action: "Run one full party-build content review before packaging.",
+      command: "npm run content:review",
+      doneWhen: "content report has no P0 content blockers.",
+      source: "dist/content/content-pipeline-report.md"
+    });
+  }
+
+  return actions.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+}
+
+function priorityRank(priority) {
+  return { P0: 0, P1: 1, P2: 2, P3: 3 }[priority] ?? 99;
+}
+
 function makeMarkdown(data) {
   const risks = data.risks.length ? data.risks.map((risk) => `- ${risk}`).join("\n") : "- No open content-pipeline risks detected.";
+  const actions = data.nextActions.map((action) => `| ${action.priority} | ${action.area} | ${action.action} | \`${action.command}\` | ${action.doneWhen} | \`${action.source}\` |`).join("\n");
   return `# Content Pipeline Report
 
 - Generated: ${data.generatedAt}
@@ -112,6 +206,12 @@ function makeMarkdown(data) {
 ## Open Risks
 
 ${risks}
+
+## Next Actions
+
+| Priority | Area | Action | Command | Done When | Source |
+|---|---|---|---|---|---|
+${actions}
 
 ## Source Reports
 
