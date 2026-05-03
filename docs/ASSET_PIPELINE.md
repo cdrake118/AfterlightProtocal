@@ -13,6 +13,14 @@ The runtime should only load game-ready transparent atlases plus JSON metadata. 
 Run:
 
 ```sh
+npm run assets:review
+```
+
+This runs the full character-art handoff chain: brief generation, atlas-template generation, runtime atlas validation, and PNG audit.
+
+Run:
+
+```sh
 npm run assets:brief
 ```
 

@@ -16,6 +16,14 @@ Open `assets/maps/afterlight.tiled-project` in Tiled so object types, layer name
 Run:
 
 ```sh
+npm run maps:review
+```
+
+This runs the full map handoff chain: art brief, map art audit, Tiled editor kit, SVG preview, and Tiled validation.
+
+Run:
+
+```sh
 npm run maps:art-brief
 ```
 
