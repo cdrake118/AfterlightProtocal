@@ -1,0 +1,40 @@
+{
+  "name": "afterlight-protocol-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 5173 --bind 127.0.0.1",
+    "serve:party": "node server.js",
+    "start": "node server.js",
+    "check": "node --check server.js && node --check src/platform.js && node --check src/game.js && node --check src/controller.js && node --check scripts/package-web.mjs && node --check scripts/release-audit.mjs && node --check scripts/steam-depot-plan.mjs && node --check scripts/release-report.mjs && node --check scripts/steam-upload.mjs && node --check scripts/private-beta-plan.mjs && node --check scripts/playtest-feedback-intake.mjs && node --check scripts/store-page-kit.mjs && node --check scripts/store-capture-plan.mjs && node --check scripts/localization-kit.mjs && node --check scripts/platform-config-check.mjs && node --check scripts/input-action-map.mjs && node --check scripts/network-protocol.mjs && node --check scripts/network-protocol-check.mjs && node --check scripts/replay-link-check.mjs && node --check scripts/submission-packet.mjs && node --check scripts/multiplayer-contract-smoke.mjs && node --check scripts/validate-character-atlas.mjs && node --check scripts/import-tiled-map.mjs && node --check scripts/art-asset-audit.mjs && node --check scripts/audio-asset-audit.mjs && node scripts/smoke-runtime.mjs && node scripts/network-protocol-check.mjs && node scripts/replay-link-check.mjs && node scripts/multiplayer-contract-smoke.mjs",
+    "assets:validate": "node scripts/validate-character-atlas.mjs assets/characters/atlas-example.json",
+    "assets:audit": "node scripts/art-asset-audit.mjs",
+    "audio:audit": "node scripts/audio-asset-audit.mjs",
+    "maps:import": "node scripts/import-tiled-map.mjs assets/maps/manor-party.tiled.json",
+    "maps:build": "node scripts/import-tiled-map.mjs assets/maps/manor-party.tiled.json --write assets/maps/manor-party.game-map.json",
+    "smoke:multiplayer": "node scripts/multiplayer-contract-smoke.mjs",
+    "package:web": "node scripts/package-web.mjs",
+    "audit:release": "npm run package:web && node scripts/release-audit.mjs",
+    "steam:plan": "npm run audit:release && node scripts/steam-depot-plan.mjs",
+    "steam:upload:dry-run": "npm run steam:plan && node scripts/steam-upload.mjs --dry-run",
+    "steam:upload": "npm run steam:plan && node scripts/steam-upload.mjs",
+    "release:report": "npm run steam:upload:dry-run && node scripts/release-report.mjs",
+    "playtest:plan": "npm run release:report && node scripts/private-beta-plan.mjs",
+    "playtest:intake": "npm run playtest:plan && node scripts/playtest-feedback-intake.mjs",
+    "store:kit": "npm run playtest:plan && node scripts/store-page-kit.mjs",
+    "store:capture": "npm run store:kit && npm run replay:check && node scripts/store-capture-plan.mjs",
+    "localization:kit": "npm run store:kit && npm run input:map && node scripts/localization-kit.mjs",
+    "config:check": "node scripts/platform-config-check.mjs",
+    "input:map": "node scripts/input-action-map.mjs",
+    "network:protocol": "node scripts/network-protocol.mjs",
+    "network:check": "node scripts/network-protocol-check.mjs",
+    "replay:check": "node scripts/replay-link-check.mjs",
+    "submission:packet": "npm run localization:kit && npm run config:check && npm run network:protocol && npm run replay:check && node scripts/playtest-feedback-intake.mjs && node scripts/store-capture-plan.mjs && node scripts/submission-packet.mjs"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  }
+}

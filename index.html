@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Afterlight Protocol Prototype</title>
+    <link rel="stylesheet" href="styles.css?v=20260502-08">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="stage" id="stage" aria-label="Afterlight Protocol game prototype">
+        <canvas id="game" width="1280" height="720"></canvas>
+        <section class="main-menu-panel" id="mainMenuPanel" aria-label="Main menu">
+          <div class="main-menu-content">
+            <span class="label">Afterlight Protocol</span>
+            <h1>Afterlight Protocol</h1>
+            <p>Enter the facility, choose a side, and keep the hunt readable.</p>
+            <div class="main-menu-actions">
+              <button id="startBtn" class="primary-button" type="button">Start</button>
+              <button id="menuHelpBtn" type="button">How to Play</button>
+              <button id="settingsBtn" type="button">Settings</button>
+            </div>
+          </div>
+        </section>
+        <div class="hud hud-top">
+          <div class="brand-card">
+            <span class="label">Afterlight Protocol</span>
+            <strong id="phase">Lobby</strong>
+          </div>
+          <div class="meter-group time-meter">
+            <span>Time</span>
+            <strong id="timer">05:00</strong>
+          </div>
+          <div class="meter-group anomaly-stat">
+            <span>Anomaly Health <output id="anomalyHealthPercent">100%</output></span>
+            <meter id="anomalyMeter" min="0" max="100" value="100"></meter>
+          </div>
+          <div class="meter-group battery-stat">
+            <span>Battery</span>
+            <meter id="batteryMeter" min="0" max="125" value="125"></meter>
+          </div>
+          <div class="meter-group resolve-stat">
+            <span>Resolve</span>
+            <meter id="resolveMeter" min="0" max="100" value="100"></meter>
+          </div>
+          <div class="meter-group signal-stat">
+            <span>Signal</span>
+            <meter id="signalMeter" min="0" max="100" value="0"></meter>
+          </div>
+          <div class="meter-group ability-stat">
+            <span>Ability</span>
+            <meter id="abilityMeter" min="0" max="100" value="100"></meter>
+          </div>
+          <div class="meter-group event-meter event-stat">
+            <span>Arena Event</span>
+            <strong id="eventName">Skylight Flash</strong>
+            <meter id="eventMeter" min="0" max="100" value="0"></meter>
+          </div>
+        </div>
+        <div class="hud hud-bottom">
+          <details class="setup-details" open>
+            <summary>Setup</summary>
+            <div class="setup-menu" aria-label="Match setup">
+              <div class="setup-menu-head">
+                <span class="label">Pre-Match</span>
+                <strong>Choose Match</strong>
+              </div>
+              <div class="control-cluster setup-actions">
+                <label class="map-control">
+                  <span>Map</span>
+                  <select id="mapSelect">
+                    <option value="Observatory Annex">Observatory Annex</option>
+                    <option value="Tideglass Aquarium">Tideglass Aquarium</option>
+                    <option value="Prism Foundry">Prism Foundry</option>
+                    <option value="Gloamhall Manor">Gloamhall Manor</option>
+                    <option value="Gloamhall Manor Compact">Gloamhall Manor Compact</option>
+                  </select>
+                </label>
+                <button id="roleBtn" type="button">Role: Investigator</button>
+                <label class="map-control compact-control">
+                  <span>Round</span>
+                  <select id="durationSelect">
+                    <option value="180">3 min</option>
+                    <option value="300" selected>5 min</option>
+                    <option value="420">7 min</option>
+                  </select>
+                </label>
+                <label class="map-control compact-control">
+                  <span>Bots</span>
+                  <select id="botPressureSelect">
+                    <option value="relaxed">Relaxed</option>
+                    <option value="standard" selected>Standard</option>
+                    <option value="intense">Intense</option>
+                  </select>
+                </label>
+              </div>
+              <div class="control-cluster primary-actions" aria-label="Match actions">
+                <button id="readyBtn" class="primary-button" type="button">Ready</button>
+                <button id="hostBtn" type="button">Host</button>
+                <button id="joinBtn" type="button">Quick Join</button>
+                <button id="browseBtn" type="button">Browse</button>
+              </div>
+              <details class="setup-tools">
+                <summary>Invite & Tools</summary>
+                <div class="advanced-menu" aria-label="Invite and tools">
+                  <label class="invite-control">
+                    <span>Invite</span>
+                    <input id="inviteInput" type="text" inputmode="text" autocomplete="off" maxlength="8" placeholder="CODE">
+                  </label>
+                  <button id="joinCodeBtn" type="button">Join Code</button>
+                  <label class="seed-control">
+                    <span>Seed</span>
+                    <input id="seedInput" type="text" inputmode="text" autocomplete="off" maxlength="8" placeholder="AUTO">
+                  </label>
+                  <button id="replaySeedBtn" type="button">Replay Seed</button>
+                  <button id="netLogBtn" type="button">Net Log</button>
+                  <button id="reportsBtn" type="button">Reports</button>
+                </div>
+              </details>
+            </div>
+          </details>
+          <div class="control-cluster role-actions" aria-label="Control reference">
+            <div class="control-reference">
+              <span id="abilityRef">E Pulse Scan</span>
+              <span id="interactRef" hidden></span>
+            </div>
+            <button id="abilityBtn" type="button" hidden>Pulse Scan</button>
+            <button id="interactBtn" type="button" hidden>Interact</button>
+            <button id="resetBtn" type="button">Reset</button>
+          </div>
+          <details class="help-details">
+            <summary>How to Play</summary>
+            <section class="help-card" aria-label="How to Play">
+              <div class="help-head">
+                <div>
+                  <span class="label">Field Manual</span>
+                  <h1>How to Play</h1>
+                </div>
+                <button id="closeHelpBtn" type="button">Close</button>
+              </div>
+              <div class="help-grid">
+                <article>
+                  <h2>Investigators</h2>
+                  <p>Track the anomaly, keep your light charged, and drain its health before the timer ends.</p>
+                  <ul>
+                    <li>Move with WASD or arrow keys.</li>
+                    <li>Aim with the mouse.</li>
+                    <li>Hold left mouse to project light.</li>
+                    <li>Controller: left stick move, right stick aim, RT light, Y or LB ability.</li>
+                    <li>World prompts switch between keyboard and controller labels automatically.</li>
+                    <li>Press E to pulse scan nearby hidden energy.</li>
+                    <li>Stay close to teammates and keep light pressure on the anomaly.</li>
+                    <li>Stand near a collapsed teammate to revive them over time.</li>
+                    <li>Warning icons appear over investigators when the anomaly is close.</li>
+                    <li>AI teammates revive, resupply, search, and pressure the anomaly during solo testing.</li>
+                    <li>Use world prompts and teammate tags to read objectives quickly.</li>
+                    <li>Host or join from the lobby browser, quick join, or an invite code.</li>
+                    <li>Cycle Suit in the lobby to change your investigator colorway.</li>
+                  </ul>
+                </article>
+                <article>
+                  <h2>Anomaly</h2>
+                  <p>Stay hidden, collapse investigator resolve, and use the arena to break line of sight.</p>
+                  <ul>
+                    <li>Move with WASD or arrow keys.</li>
+                    <li>You move 15% faster than investigators.</li>
+                    <li>Controller: left stick move, A dash, Y or LB blackout.</li>
+                    <li>Touch investigators to instantly collapse them.</li>
+                    <li>Press Space to dash.</li>
+                    <li>Press E to trigger a 5-second blackout with a 30-second cooldown; investigators farther from the wave keep more battery.</li>
+                    <li>During blackout, investigators only see through active flashlight beams.</li>
+                    <li>Echo decoys create false signal pressure and can pull investigator aim until burned out.</li>
+                    <li>Avoid sustained light beams.</li>
+                  </ul>
+                </article>
+                <article>
+                  <h2>Round Rules</h2>
+                  <p>Investigators win by containing the anomaly. The anomaly wins by collapsing the team.</p>
+                  <ul>
+                    <li>Battery does not recharge on its own; one pickup starts on the map, then low battery can call in another after a 30-second cooldown.</li>
+                    <li>When only one investigator remains active, an Overcharge battery can appear for a short comeback window.</li>
+                    <li>Solo investigators start with extra lives for local testing.</li>
+                    <li>Flashlights, arena events, and close contact reveal the anomaly.</li>
+                    <li>Each arena has a timed event that can expose, distort, or misdirect the hunt.</li>
+                    <li>Walls and lab equipment block light and pulse checks.</li>
+                    <li>The round ends when anomaly health or tracker resolve runs out; timeout is a draw.</li>
+                  </ul>
+                </article>
+                <article>
+                  <h2>Accessibility</h2>
+                  <p>Use Motion and Contrast from the top bar to tune readability before hosting or joining.</p>
+                  <ul>
+                    <li>Motion Reduced softens screen shake, lightning flashes, and particle bursts.</li>
+                    <li>Contrast High brightens UI surfaces and boosts canvas readability.</li>
+                  </ul>
+                </article>
+              </div>
+            </section>
+          </details>
+        </div>
+        <aside class="lobby-panel" id="lobbyPanel" aria-label="Lobby roster"></aside>
+        <aside class="settings-panel" id="settingsPanel" hidden aria-label="Settings">
+          <div class="browser-head">
+            <div>
+              <span class="label">Universal</span>
+              <h2>Settings</h2>
+            </div>
+            <button id="closeSettingsBtn" type="button">Close</button>
+          </div>
+          <div class="settings-grid">
+            <button id="suitBtn" type="button">Suit: Field White</button>
+            <button id="soundBtn" type="button">Sound Off</button>
+            <label class="volume-control">
+              <span>Master</span>
+              <input id="masterVolume" type="range" min="0" max="100" value="90">
+            </label>
+            <label class="volume-control">
+              <span>Music</span>
+              <input id="musicVolume" type="range" min="0" max="100" value="72">
+            </label>
+            <label class="volume-control">
+              <span>SFX</span>
+              <input id="sfxVolume" type="range" min="0" max="100" value="88">
+            </label>
+            <button id="motionBtn" type="button">Motion Full</button>
+            <button id="contrastBtn" type="button">Contrast Std</button>
+          </div>
+        </aside>
+        <aside class="browser-panel" id="browserPanel" hidden aria-label="Lobby browser">
+          <div class="browser-head">
+            <div>
+              <span class="label">Matchmaking</span>
+              <h2>Lobby Browser</h2>
+            </div>
+            <button id="closeBrowserBtn" type="button">Close</button>
+          </div>
+          <div class="browser-list" id="browserList"></div>
+        </aside>
+        <aside class="network-panel" id="networkPanel" hidden aria-label="Network diagnostics">
+          <div class="browser-head">
+            <div>
+              <span class="label">Diagnostics</span>
+              <h2>Network Log</h2>
+            </div>
+            <button id="closeNetworkBtn" type="button">Close</button>
+          </div>
+          <div class="network-summary" id="networkSummary"></div>
+          <ol class="network-list" id="networkList"></ol>
+        </aside>
+        <aside class="reports-panel" id="reportsPanel" hidden aria-label="Saved playtest reports">
+          <div class="browser-head">
+            <div>
+              <span class="label">Playtest</span>
+              <h2>Saved Reports</h2>
+            </div>
+            <div class="panel-actions">
+              <button id="importReportsBtn" type="button">Import</button>
+              <button id="exportReportsBtn" type="button">Export</button>
+              <button id="clearReportsBtn" type="button">Clear</button>
+              <button id="closeReportsBtn" type="button">Close</button>
+            </div>
+          </div>
+          <div class="report-import" id="reportImportPanel" hidden>
+            <textarea id="reportImportText" rows="4" placeholder="Paste exported report archive JSON"></textarea>
+            <div class="report-actions">
+              <button id="mergeReportsBtn" type="button">Merge</button>
+              <button id="cancelReportImportBtn" type="button">Cancel</button>
+            </div>
+          </div>
+          <div class="network-summary" id="reportsSummary"></div>
+          <div class="browser-list reports-list" id="reportsList"></div>
+        </aside>
+        <div class="status" id="status">Local lobby waiting</div>
+        <section class="results-panel" id="resultsPanel" hidden aria-label="Match results">
+          <div>
+            <span class="label">Round Complete</span>
+            <h1 id="resultTitle">Results</h1>
+          </div>
+          <dl id="resultStats"></dl>
+          <div class="achievement-list" id="achievementList"></div>
+          <div class="tuning-notes" id="tuningNotes" aria-label="Tuning notes"></div>
+          <div class="feedback-actions">
+            <button id="feedbackBtn" type="button">Feedback Packet</button>
+            <button id="copyFeedbackBtn" type="button">Copy Packet</button>
+            <button id="copyReplayLinkBtn" type="button">Copy Replay Link</button>
+          </div>
+          <textarea id="feedbackText" class="feedback-text" readonly hidden aria-label="Playtest feedback packet"></textarea>
+          <button id="rematchBtn" type="button">Rematch</button>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="src/game.js?v=20260502-08"></script>
+  </body>
+</html>

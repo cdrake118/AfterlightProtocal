@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "buses": {
+    "master": { "volume": 0.9 },
+    "music": { "volume": 0.72 },
+    "sfx": { "volume": 0.88 }
+  },
+  "music": {
+    "menu": { "src": "assets/audio/music/menu-loop.ogg", "loop": true, "bus": "music" },
+    "lobby": { "src": "assets/audio/music/lobby-loop.ogg", "loop": true, "bus": "music" },
+    "round": { "src": "assets/audio/music/round-ambience.ogg", "loop": true, "bus": "music" },
+    "tension": { "src": "assets/audio/music/ghost-near-layer.ogg", "loop": true, "bus": "music" }
+  },
+  "sfx": {
+    "flashlight_on": { "src": "assets/audio/sfx/flashlight-on.ogg", "bus": "sfx" },
+    "flashlight_off": { "src": "assets/audio/sfx/flashlight-off.ogg", "bus": "sfx" },
+    "ghost_damage": { "src": "assets/audio/sfx/ghost-damage-loop.ogg", "bus": "sfx", "loop": true },
+    "ghost_shock": { "src": "assets/audio/sfx/ghost-shock.ogg", "bus": "sfx" },
+    "ghost_grab": { "src": "assets/audio/sfx/ghost-grab.ogg", "bus": "sfx" },
+    "ghost_escape": { "src": "assets/audio/sfx/ghost-escape.ogg", "bus": "sfx" },
+    "lightning": { "src": "assets/audio/sfx/lightning-reveal.ogg", "bus": "sfx" },
+    "pickup": { "src": "assets/audio/sfx/battery-pickup.ogg", "bus": "sfx" },
+    "revive": { "src": "assets/audio/sfx/revive.ogg", "bus": "sfx" },
+    "downed": { "src": "assets/audio/sfx/player-downed.ogg", "bus": "sfx" }
+  }
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <title>Afterlight Controller</title>
+    <link rel="stylesheet" href="styles.css?v=20260503-01">
+    <link rel="stylesheet" href="controller.css?v=20260503-01">
+  </head>
+  <body class="controller-body">
+    <main class="controller-shell">
+      <section class="join-card" id="joinCard">
+        <span class="label">Afterlight Protocol</span>
+        <h1>Join Hunt</h1>
+        <label>
+          <span>Room Code</span>
+          <input id="roomCodeInput" inputmode="text" autocomplete="one-time-code" maxlength="6" placeholder="CODE">
+        </label>
+        <label>
+          <span>Name</span>
+          <input id="nameInput" autocomplete="nickname" maxlength="18" placeholder="Player">
+        </label>
+        <div class="segmented" role="group" aria-label="Role">
+          <button id="investigatorRoleBtn" type="button" class="selected">Investigator</button>
+          <button id="anomalyRoleBtn" type="button">Anomaly</button>
+        </div>
+        <label>
+          <span>Skin</span>
+          <select id="skinSelect">
+            <option value="brown">Field Brown</option>
+            <option value="blond">Signal Blue</option>
+            <option value="black">Sable Violet</option>
+            <option value="red">Copper Teal</option>
+          </select>
+        </label>
+        <button id="joinRoomBtn" class="primary-button" type="button">Join Room</button>
+        <p id="joinStatus" class="controller-status">Enter the room code from the host screen.</p>
+      </section>
+
+      <section class="pad-screen" id="padScreen" hidden>
+        <header class="controller-top">
+          <div>
+            <span class="label" id="roomCodeLabel">Room</span>
+            <h1 id="playerLabel">Controller</h1>
+          </div>
+          <button id="readyBtn" type="button">Ready</button>
+        </header>
+        <canvas id="miniMap" width="360" height="210" hidden aria-label="Anomaly private map"></canvas>
+        <div class="touch-zone">
+          <div class="joystick" id="joystick" aria-label="Move joystick">
+            <span id="joystickKnob"></span>
+          </div>
+          <div class="action-pad">
+            <button id="lightBtn" class="action-button primary-action" type="button">Light</button>
+            <button id="dashBtn" class="action-button" type="button">Dash</button>
+            <button id="abilityBtn" class="action-button" type="button">Ability</button>
+          </div>
+        </div>
+        <p id="padStatus" class="controller-status">Waiting for host.</p>
+      </section>
+    </main>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="src/controller.js?v=20260503-01"></script>
+  </body>
+</html>

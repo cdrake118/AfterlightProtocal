@@ -1,0 +1,186 @@
+.controller-body {
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(122, 228, 214, 0.16), transparent 34rem),
+    linear-gradient(155deg, #071014, #101722 58%, #160f18);
+  color: #edf7f7;
+  touch-action: none;
+  user-select: none;
+}
+
+.controller-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: stretch;
+  padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+.join-card,
+.pad-screen {
+  width: min(100%, 520px);
+  margin: auto;
+  display: grid;
+  gap: 16px;
+}
+
+.join-card {
+  padding: 22px;
+  border: 1px solid rgba(122, 228, 214, 0.28);
+  border-radius: 8px;
+  background: rgba(4, 10, 14, 0.86);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+}
+
+.join-card h1,
+.controller-top h1 {
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 3.6rem);
+  line-height: 0.95;
+}
+
+.join-card label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+  color: #aebfc7;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.join-card input,
+.join-card select {
+  min-height: 52px;
+  border: 1px solid rgba(122, 228, 214, 0.3);
+  border-radius: 6px;
+  background: rgba(2, 7, 10, 0.9);
+  color: #f8fbfd;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 900;
+  padding: 0 14px;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.segmented button,
+.controller-top button,
+.action-button {
+  border: 1px solid rgba(122, 228, 214, 0.26);
+  border-radius: 7px;
+  background: rgba(9, 20, 26, 0.92);
+  color: #f8fbfd;
+  font: inherit;
+  font-weight: 950;
+  min-height: 54px;
+}
+
+.segmented button.selected {
+  background: #7ae4d6;
+  color: #071014;
+}
+
+.controller-status {
+  margin: 0;
+  color: #aebfc7;
+  font-weight: 800;
+}
+
+.controller-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.controller-top button.ready {
+  background: #f4b35d;
+  color: #101014;
+}
+
+#miniMap {
+  width: 100%;
+  height: auto;
+  border: 1px solid rgba(122, 228, 214, 0.3);
+  border-radius: 8px;
+  background: #071014;
+}
+
+.touch-zone {
+  min-height: 52svh;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(128px, 0.72fr);
+  align-items: end;
+  gap: 18px;
+}
+
+.joystick {
+  width: min(58vw, 250px);
+  aspect-ratio: 1;
+  align-self: end;
+  border-radius: 50%;
+  border: 2px solid rgba(122, 228, 214, 0.35);
+  background:
+    radial-gradient(circle, rgba(122, 228, 214, 0.2), transparent 38%),
+    rgba(4, 10, 14, 0.72);
+  position: relative;
+  box-shadow: inset 0 0 28px rgba(122, 228, 214, 0.14);
+}
+
+.joystick span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #7ae4d6;
+  box-shadow: 0 0 28px rgba(122, 228, 214, 0.55);
+}
+
+.action-pad {
+  display: grid;
+  gap: 12px;
+  align-self: end;
+}
+
+.action-button {
+  min-height: 74px;
+  font-size: 1.08rem;
+}
+
+.primary-action {
+  min-height: 112px;
+  background: #f8fbfd;
+  color: #071014;
+}
+
+.primary-action.active,
+.action-button.active {
+  background: #f4b35d;
+  color: #071014;
+}
+
+@media (orientation: landscape) {
+  .controller-shell {
+    padding: max(12px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  }
+
+  .pad-screen {
+    width: min(100%, 900px);
+  }
+
+  .touch-zone {
+    min-height: 46svh;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .joystick {
+    width: min(38vw, 250px);
+  }
+}
