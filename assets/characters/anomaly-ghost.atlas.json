@@ -1,0 +1,14 @@
+{
+  "id": "anomaly-ghost",
+  "role": "anomaly",
+  "image": "assets/characters/anomaly-ghost-atlas.png",
+  "frame": { "width": 128, "height": 128 },
+  "grid": { "columns": 4, "rows": 9 },
+  "anchor": { "x": 64, "y": 94 },
+  "safePadding": 8,
+  "directions": ["south", "southEast", "east", "northEast", "north", "northWest", "west", "southWest"],
+  "animations": {
+    "idle": { "rows": [0, 8], "frames": [0, 1, 2, 3], "fps": 8 },
+    "revealed": { "rows": [4], "frames": [0, 1, 2, 3], "fps": 10 }
+  }
+}

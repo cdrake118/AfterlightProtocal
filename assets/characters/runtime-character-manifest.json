@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "runtimeAtlases": [
+    "assets/characters/anomaly-ghost.atlas.json"
+  ],
+  "sourceOnlyAssets": [
+    {
+      "id": "investigator-brown-source",
+      "image": "assets/characters/investigator-brown-atlas.png",
+      "reason": "Generated RGB sheet kept as reference until it is re-exported as a transparent fixed-frame atlas."
+    },
+    {
+      "id": "investigator-blond-source",
+      "image": "assets/characters/investigator-blond-atlas.png",
+      "reason": "Generated RGB sheet kept as reference until it is re-exported as a transparent fixed-frame atlas."
+    },
+    {
+      "id": "investigator-black-source",
+      "image": "assets/characters/investigator-black-atlas.png",
+      "reason": "Generated RGB sheet kept as reference until it is re-exported as a transparent fixed-frame atlas."
+    },
+    {
+      "id": "investigator-red-source",
+      "image": "assets/characters/investigator-red-atlas.png",
+      "reason": "Generated RGB sheet kept as reference until it is re-exported as a transparent fixed-frame atlas."
+    }
+  ]
+}

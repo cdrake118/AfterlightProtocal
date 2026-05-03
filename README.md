@@ -151,7 +151,7 @@ Run:
 npm run assets:validate
 ```
 
-This verifies the current example character atlas manifest and rejects RGB/white-background sprite sheets before they can enter runtime.
+This verifies the current runtime character atlas manifests and rejects RGB/white-background sprite sheets before they can enter runtime. Generated investigator sheets remain source-only until they are cleaned into transparent fixed-frame atlases.
 
 Run:
 

@@ -244,40 +244,7 @@ const aiProbeMinCooldown = GameBalance.ai.probeMinCooldownSeconds;
 const aiProbeMaxCooldown = GameBalance.ai.probeMaxCooldownSeconds;
 const characterSpriteSize = 128;
 const characterSpriteCache = new Map();
-const investigatorAtlases = {
-  brown: {
-    image: null,
-    ready: false,
-    cols: 3,
-    rows: 8,
-    src: "assets/characters/investigator-brown-atlas.png",
-    layout: { startX: 456, startY: 90, gapX: 228, gapY: 123, w: 218, h: 178 }
-  },
-  blond: {
-    image: null,
-    ready: false,
-    cols: 3,
-    rows: 8,
-    src: "assets/characters/investigator-blond-atlas.png",
-    layout: { startX: 56, startY: 64, gapX: 326, gapY: 128, w: 150, h: 120 }
-  },
-  black: {
-    image: null,
-    ready: false,
-    cols: 3,
-    rows: 10,
-    src: "assets/characters/investigator-black-atlas.png",
-    layout: { startX: 370, startY: 84, gapX: 194, gapY: 143, w: 166, h: 134 }
-  },
-  red: {
-    image: null,
-    ready: false,
-    cols: 3,
-    rows: 8,
-    src: "assets/characters/investigator-red-atlas.png",
-    layout: { startX: 390, startY: 84, gapX: 252, gapY: 143, w: 172, h: 134 }
-  }
-};
+const investigatorAtlases = {};
 const anomalyAtlas = {
   image: null,
   ready: false,
@@ -3440,7 +3407,8 @@ function drawHunterSprite(agent, down, isPlayer) {
 }
 
 function hasInvestigatorAtlas(agent) {
-  return Boolean(investigatorAtlases[getInvestigatorAtlasKey(agent)]);
+  const atlas = investigatorAtlases[getInvestigatorAtlasKey(agent)];
+  return Boolean(atlas?.ready && atlas.image);
 }
 
 function drawInvestigatorAtlasSprite(agent, down, isPlayer) {
