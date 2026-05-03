@@ -12,6 +12,7 @@ const reports = {
   characterBriefs: await readOptional("dist/assets/character-art-brief.json"),
   mapValidation: await readOptional("dist/maps/tiled-map-validation.json"),
   mapArt: await readOptional("dist/maps/map-art-audit.json"),
+  audioBriefs: await readOptional("dist/assets/audio-brief.json"),
   audio: await readOptional("dist/assets/audio-asset-audit.json")
 };
 
@@ -26,6 +27,7 @@ const output = {
     totalMaps: reports.mapValidation?.summary?.totalMaps ?? 0,
     plannedMapArt: reports.mapArt?.summary?.planned ?? 0,
     readyMapArt: reports.mapArt?.summary?.ready ?? 0,
+    audioBriefs: reports.audioBriefs?.summary?.totalSlots ?? 0,
     audioReady: reports.audio?.summary?.ready ?? 0,
     audioTotal: reports.audio?.summary?.totalSlots ?? 0
   },
@@ -63,6 +65,10 @@ function makeRisks(data) {
   else if (mapArt.ready === 0 && mapArt.planned > 0) risks.push("Map background art is planned but no rendered map plate is ready yet.");
 
   const audio = data.audio?.summary;
+  const audioBriefs = data.audioBriefs?.summary;
+  if (!audioBriefs) risks.push("Run npm run audio:brief to generate audio production handoff data.");
+  else if (audioBriefs.missingBriefs > 0) risks.push(`${audioBriefs.missingBriefs} audio slots are missing production briefs.`);
+
   if (!audio) risks.push("Run npm run audio:audit to generate audio audit data.");
   else if (audio.missing > 0) risks.push(`${audio.missing} audio slots are still missing files.`);
 
@@ -83,6 +89,7 @@ function makeMarkdown(data) {
 | Character art briefs | ${data.summary.characterBriefs} | ${data.summary.characterBriefs} |
 | Valid Tiled maps | ${data.summary.validMaps} | ${data.summary.totalMaps} |
 | Ready map art | ${data.summary.readyMapArt} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
+| Audio production briefs | ${data.summary.audioBriefs} | ${data.summary.audioTotal || data.summary.audioBriefs} |
 | Audio files | ${data.summary.audioReady} | ${data.summary.audioTotal} |
 
 ## Open Risks

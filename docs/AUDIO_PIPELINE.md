@@ -31,3 +31,21 @@ npm run audio:audit
 ```
 
 This writes `dist/assets/audio-asset-audit.json` and `.md`, listing every required music/SFX slot, whether the file exists, its bus, loop setting, and size. The browser synth sounds remain fallback only; a high-quality party build should drive this audit toward zero missing files.
+
+## Production Briefs
+
+Run:
+
+```sh
+npm run audio:brief
+```
+
+This writes `dist/assets/audio-brief.json` and `.md` from `assets/audio/audio-manifest.json` plus `assets/audio/audio-briefs.json`. Use it as the handoff sheet for music and SFX production: each slot lists the target file path, intent, duration, loop behavior, legally-clean prompt, and delivery checklist.
+
+For a full audio readiness pass, run:
+
+```sh
+npm run audio:review
+```
+
+This generates the production brief first, then audits which runtime files are still missing.

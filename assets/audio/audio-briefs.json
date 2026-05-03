@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "formatRequirements": {
+    "preferred": "ogg",
+    "fallback": "mp3",
+    "sampleRateHz": 48000,
+    "bitDepth": 24,
+    "loudness": {
+      "musicIntegratedLufs": "-18 to -16",
+      "sfxPeakDb": "-6 or lower"
+    }
+  },
+  "globalDirection": [
+    "Original family-friendly haunted party game audio with premium console polish.",
+    "Keep references broad: cozy haunted manor, playful suspense, toy-like gadgets, bright flashlight energy, and mischievous supernatural movement.",
+    "Do not imitate or quote any recognizable franchise melody, character voice, sound logo, or proprietary audio cue.",
+    "All loops must have clean zero-click loop points and no baked silence at the start."
+  ],
+  "briefs": {
+    "menu": {
+      "intent": "Welcoming title-screen loop that feels polished, mysterious, and safe for a couch party.",
+      "durationSeconds": "45-75",
+      "prompt": "Create a seamless main menu music loop for an original haunted party game: marimba or celeste accents, warm bass, soft strings, light percussion, playful suspense, no scary jump-scare tone.",
+      "implementationNotes": "Must loop indefinitely without fatigue while players read menus or adjust settings."
+    },
+    "lobby": {
+      "intent": "Low-friction lobby loop for phones joining, role selection, and ready checks.",
+      "durationSeconds": "45-90",
+      "prompt": "Create a seamless lobby music loop with curious mansion ambience, gentle pulse, soft hand percussion, and subtle clockwork details. It should feel anticipatory but calm.",
+      "implementationNotes": "Leave enough sonic room for join, ready, and selection SFX."
+    },
+    "round": {
+      "intent": "Neutral match ambience that supports partial-information tension without telling players where the anomaly is.",
+      "durationSeconds": "60-120",
+      "prompt": "Create a seamless round ambience loop: low room tone, distant thunder, soft creaks, restrained percussion, and airy synth pads. Suspenseful but not busy.",
+      "implementationNotes": "This is the default bed under the whole round and should not contain directional cues."
+    },
+    "tension": {
+      "intent": "Adaptive ghost-near layer that adds pressure as danger rises.",
+      "durationSeconds": "20-45",
+      "prompt": "Create a seamless danger layer for an invisible nearby anomaly: rising harmonic shimmer, muffled heartbeat-like pulse, and airy pressure. No exact directional movement or obvious stingers.",
+      "implementationNotes": "Designed to fade in/out based on proximity. Avoid transients that sound wrong when volume changes quickly."
+    },
+    "flashlight_on": {
+      "intent": "Short, satisfying flashlight activation click.",
+      "durationSeconds": "0.1-0.35",
+      "prompt": "Create a crisp gadget flashlight-on sound: physical switch click plus tiny electric chirp, bright and readable on phone speakers.",
+      "implementationNotes": "Must be distinct from flashlight_off and safe to play frequently."
+    },
+    "flashlight_off": {
+      "intent": "Short flashlight deactivation click.",
+      "durationSeconds": "0.1-0.35",
+      "prompt": "Create a compact gadget flashlight-off sound: softer switch click, quick power-down tick, no long tail.",
+      "implementationNotes": "Must remain audible at low SFX volume."
+    },
+    "ghost_damage": {
+      "intent": "Loop that plays while flashlights are actively draining anomaly health.",
+      "durationSeconds": "0.8-1.5",
+      "prompt": "Create a seamless damage loop for a ghost caught in flashlight energy: sizzling spectral static, soft electric crackle, airy strain, no harsh clipping.",
+      "implementationNotes": "Loop must start quickly, tolerate rapid fade in/out, and not mask the shock one-shot."
+    },
+    "ghost_shock": {
+      "intent": "Immediate one-shot when the anomaly is stunned by flashlight contact.",
+      "durationSeconds": "0.4-0.9",
+      "prompt": "Create a punchy ghost shock sound: bright electric snap, spectral puff, small comedic impact, premium arcade readability.",
+      "implementationNotes": "Should clearly communicate that the anomaly is briefly immobilized."
+    },
+    "ghost_grab": {
+      "intent": "Clear feedback when the anomaly grabs an investigator.",
+      "durationSeconds": "0.5-1.1",
+      "prompt": "Create a ghost grab one-shot: quick whoosh, soft impact, surprised fabric/air pull, and supernatural pop. Playful scary, not violent.",
+      "implementationNotes": "Must read on the shared TV and on the grabbed player's phone."
+    },
+    "ghost_escape": {
+      "intent": "Plays while the anomaly is smoke-trailing away during its post-shock escape window.",
+      "durationSeconds": "1.0-2.0",
+      "prompt": "Create a fast spectral escape sound: airy smoke rush, fluttering vapor, upward pitch movement, and fading shimmer.",
+      "implementationNotes": "Use as a one-shot or layered with visual smoke fade; it should imply motion without adding gameplay information."
+    },
+    "lightning": {
+      "intent": "Dramatic reveal cue for lightning/global reveal moments.",
+      "durationSeconds": "1.0-2.5",
+      "prompt": "Create a stylized lightning reveal sound: bright flash crack, rolling indoor thunder, quick magical sparkle afterglow. Dramatic but not painful.",
+      "implementationNotes": "Must line up with a brief visual flash and not obscure player callouts."
+    },
+    "pickup": {
+      "intent": "Rewarding battery pickup cue.",
+      "durationSeconds": "0.25-0.6",
+      "prompt": "Create a battery pickup sound: small object collect, satisfying charge-up blip, clean high-frequency sparkle.",
+      "implementationNotes": "Should be cheerful and brief, with no lingering tail."
+    },
+    "revive": {
+      "intent": "Positive completion cue when a downed investigator is revived.",
+      "durationSeconds": "0.6-1.2",
+      "prompt": "Create a revive success sound: warm energy refill, soft sparkle, hopeful upward motion, party-game clarity.",
+      "implementationNotes": "Should pair with the revived player's invincibility blink without sounding like a win condition."
+    },
+    "downed": {
+      "intent": "Readable but non-punishing cue when an investigator is downed.",
+      "durationSeconds": "0.5-1.0",
+      "prompt": "Create a downed-player cue: soft stumble impact, low battery-like drop, tiny worried chime. Clear but not distressing.",
+      "implementationNotes": "Should trigger team awareness without feeling harsh or violent."
+    }
+  }
+}
