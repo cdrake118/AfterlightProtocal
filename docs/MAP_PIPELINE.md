@@ -40,6 +40,14 @@ This validates `assets/maps/map-art-manifest.json` and writes `dist/maps/map-art
 Run:
 
 ```sh
+npm run maps:art-candidate -- incoming/maps/manor-party-render.png --map-id manor-party-render
+```
+
+This writes a candidate map-art report into `dist/maps/map-art-candidates/` from an incoming rendered PNG. It does not modify the map art manifest or Tiled file. Use it to confirm dimensions and copy a ready manifest entry before moving the image into `assets/maps/` and adding it as a local Tiled image layer.
+
+Run:
+
+```sh
 npm run maps:kit
 ```
 
