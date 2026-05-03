@@ -23,6 +23,14 @@ This writes `dist/maps/map-editor-kit.json` and `.md`, summarizing the Tiled pro
 Run:
 
 ```sh
+npm run maps:preview
+```
+
+This writes an SVG preview to `dist/maps/previews/` so walls, props, spawns, batteries, and labels can be reviewed without opening the runtime.
+
+Run:
+
+```sh
 npm run maps:validate
 ```
 
