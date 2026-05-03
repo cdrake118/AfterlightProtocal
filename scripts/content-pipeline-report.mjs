@@ -8,6 +8,7 @@ const jsonPath = join(distRoot, "content-pipeline-report.json");
 const markdownPath = join(distRoot, "content-pipeline-report.md");
 
 const reports = {
+  contentIntake: await readOptional("dist/content/content-intake-audit.json"),
   characterRuntimeManifest: await readOptional("assets/characters/runtime-character-manifest.json"),
   characterArt: await readOptional("dist/assets/art-asset-audit.json"),
   characterBriefs: await readOptional("dist/assets/character-art-brief.json"),
@@ -36,7 +37,9 @@ const output = {
     readyMapArt: reports.mapArt?.summary?.ready ?? 0,
     audioBriefs: reports.audioBriefs?.summary?.totalSlots ?? 0,
     audioReady: reports.audio?.summary?.ready ?? 0,
-    audioTotal: reports.audio?.summary?.totalSlots ?? 0
+    audioTotal: reports.audio?.summary?.totalSlots ?? 0,
+    incomingCandidates: reports.contentIntake?.summary?.candidates ?? 0,
+    incomingNeedsCleanup: reports.contentIntake?.summary?.needsCleanup ?? 0
   },
   risks: makeRisks(reports),
   nextActions: makeNextActions(reports),
@@ -60,6 +63,10 @@ async function readOptional(path) {
 
 function makeRisks(data) {
   const risks = [];
+  const intake = data.contentIntake?.summary;
+  if (!intake) risks.push("Run npm run content:intake to classify newly dropped production files.");
+  else if (intake.needsCleanup > 0) risks.push(`${intake.needsCleanup} incoming files need cleanup before they can enter production pipelines.`);
+
   const art = data.characterArt?.summary;
   if (!art) risks.push("Run npm run assets:review to generate character art audit data.");
   else if (art.productionReady < art.totalPngs) risks.push(`${art.totalPngs - art.productionReady} character PNGs are source/reference only or need transparent re-export.`);
@@ -94,12 +101,24 @@ function makeRisks(data) {
 function makeNextActions(data) {
   const actions = [];
   const art = data.characterArt?.summary;
+  const intake = data.contentIntake?.summary;
   const runtimeAtlases = data.characterRuntimeManifest?.runtimeAtlases?.length ?? 0;
   const investigatorBrief = data.characterBriefs?.briefs?.find((brief) => brief.id === "investigator-production-atlas");
   const mapArt = data.mapArt?.summary;
   const audio = data.audio?.summary;
   const maps = data.mapValidation?.summary;
   const mapLayout = data.mapLayout?.summary;
+
+  if (intake && intake.candidates > 0) {
+    actions.push({
+      priority: "P0",
+      area: "Content Intake",
+      action: "Review incoming candidate files and intentionally promote or reject them before runtime use.",
+      command: "npm run content:intake",
+      doneWhen: "Every candidate has been moved into the correct pipeline or removed from incoming.",
+      source: "dist/content/content-intake-audit.md"
+    });
+  }
 
   if (art && art.productionReady < 2) {
     actions.push({
@@ -202,6 +221,7 @@ function makeMarkdown(data) {
 | Ready map art | ${data.summary.readyMapArt} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
 | Audio production briefs | ${data.summary.audioBriefs} | ${data.summary.audioTotal || data.summary.audioBriefs} |
 | Audio files | ${data.summary.audioReady} | ${data.summary.audioTotal} |
+| Incoming candidates | ${data.summary.incomingCandidates} | ${data.summary.incomingCandidates + data.summary.incomingNeedsCleanup} |
 
 ## Open Risks
 
