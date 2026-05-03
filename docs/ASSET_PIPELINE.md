@@ -41,6 +41,7 @@ npm run assets:audit
 ```
 
 This writes `dist/assets/art-asset-audit.json` and `.md`, listing every character PNG, whether it has alpha transparency, and whether it is safe to treat as a runtime atlas.
+The audit is intentionally strict: a PNG is only `Runtime Ready` when it is transparent and referenced by an approved runtime atlas manifest. Transparent generated sheets that are not manifest-backed remain `Candidate` or `Source Only`.
 
 Run:
 
