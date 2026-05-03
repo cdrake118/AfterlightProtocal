@@ -37,6 +37,14 @@ This writes starter atlas JSON files into `dist/assets/atlas-templates/` from th
 Run:
 
 ```sh
+npm run assets:atlas-candidate -- incoming/characters/investigator-clean.png --id investigator-production-atlas --role investigator
+```
+
+This writes a candidate atlas manifest and review note into `dist/assets/atlas-candidates/` from a cleaned incoming PNG. It does not modify runtime files. Use it after exporting a transparent fixed-frame sprite sheet, then validate and preview that candidate before promoting it into `assets/characters/`.
+
+Run:
+
+```sh
 npm run assets:audit
 ```
 
