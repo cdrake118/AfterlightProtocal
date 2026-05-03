@@ -16,6 +16,14 @@ Open `assets/maps/afterlight.tiled-project` in Tiled so object types, layer name
 Run:
 
 ```sh
+npm run maps:art-brief
+```
+
+This writes `dist/maps/map-art-brief.json` and `.md` from the map art manifest, including generation/commission prompts, negative prompts, exact pixel targets, and Tiled handoff checklists.
+
+Run:
+
+```sh
 npm run maps:art
 ```
 
