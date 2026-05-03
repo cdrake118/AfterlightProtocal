@@ -11,10 +11,18 @@ This scans `incoming/` and writes `dist/content/content-intake-audit.json` and `
 Run:
 
 ```sh
+npm run content:promotion
+```
+
+This writes `dist/content/content-promotion-plan.json` and `.md`. It gathers any generated candidate reports and lists the exact manual promotion steps for approved character atlases, map art plates, and audio files.
+
+Run:
+
+```sh
 npm run content:review
 ```
 
-This runs the incoming asset intake audit, character asset review, runtime atlas preview, map review, map layout audit, audio brief/audit pass, and writes:
+This runs the incoming asset intake audit, character asset review, runtime atlas preview, map review, map layout audit, audio brief/audit pass, promotion checklist, and writes:
 
 - `dist/content/content-pipeline-report.json`
 - `dist/content/content-pipeline-report.md`
