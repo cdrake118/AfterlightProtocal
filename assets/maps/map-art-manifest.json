@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "maps": [
+    {
+      "id": "manor-party-render",
+      "status": "planned",
+      "map": "assets/maps/manor-party.tiled.json",
+      "expectedSize": { "width": 1280, "height": 736 },
+      "image": "",
+      "usage": "Tiled image layer background",
+      "direction": "A polished top-down haunted manor floor plate with readable rooms, corridors, corners, and furniture silhouettes. Keep the composition original, TV-readable, and aligned to the Tiled pixel bounds."
+    }
+  ]
+}

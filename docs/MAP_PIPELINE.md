@@ -16,6 +16,14 @@ Open `assets/maps/afterlight.tiled-project` in Tiled so object types, layer name
 Run:
 
 ```sh
+npm run maps:art
+```
+
+This validates `assets/maps/map-art-manifest.json` and writes `dist/maps/map-art-audit.json` and `.md`. Planned entries document art direction; ready entries must point at local PNG map plates with the expected pixel size.
+
+Run:
+
+```sh
 npm run maps:kit
 ```
 
@@ -65,3 +73,4 @@ The first production goal is one polished party map rather than spreading effort
 - Keep spawns and batteries outside collision rectangles.
 - Prefer corridors, rooms, corners, and line-of-sight blockers over large open arenas.
 - Keep imported rendered art aligned to the same pixel bounds as the Tiled map, then author collision over it.
+- Track rendered background plates in `assets/maps/map-art-manifest.json` before wiring them into Tiled image layers.
