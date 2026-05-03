@@ -11,6 +11,7 @@ Open `assets/maps/afterlight.tiled-project` in Tiled so object types, layer name
 - `spawns`: point objects with type `investigatorSpawn` or `anomalySpawn`.
 - `batteries`: point objects with type `batterySpawn`.
 - `labels`: point objects with type `label`.
+- Optional image layers can hold rendered floor art, lighting guides, or reference plates. Use local project assets only; remote image URLs are rejected.
 
 Run:
 
@@ -27,6 +28,7 @@ npm run maps:preview
 ```
 
 This writes an SVG preview to `dist/maps/previews/` so walls, props, spawns, batteries, and labels can be reviewed without opening the runtime.
+If the Tiled map includes image layers, the preview includes them underneath gameplay markup so collision and spawn alignment can be checked against art.
 
 Run:
 
@@ -62,3 +64,4 @@ The first production goal is one polished party map rather than spreading effort
 - Place at least three battery spawns so pickup timing has enough rotation points.
 - Keep spawns and batteries outside collision rectangles.
 - Prefer corridors, rooms, corners, and line-of-sight blockers over large open arenas.
+- Keep imported rendered art aligned to the same pixel bounds as the Tiled map, then author collision over it.

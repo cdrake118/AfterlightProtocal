@@ -1,5 +1,5 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -13,7 +13,7 @@ await mkdir(distRoot, { recursive: true });
 for (const source of sources) {
   const mapPath = resolve(process.cwd(), source);
   const map = JSON.parse(await readFile(mapPath, "utf8"));
-  const preview = renderPreview(map, relative(root, mapPath) || source);
+  const preview = renderPreview(map, relative(root, mapPath) || source, mapPath);
   const slug = basename(source).replace(/\.tiled\.json$/, "");
   const outputPath = join(distRoot, `${slug}.svg`);
   await writeFile(outputPath, preview.svg);
@@ -43,10 +43,11 @@ async function discoverMaps() {
     .map((file) => join("assets", "maps", file));
 }
 
-function renderPreview(map, source) {
+function renderPreview(map, source, mapPath) {
   const width = Number(map.width ?? 0) * Number(map.tilewidth ?? 0);
   const height = Number(map.height ?? 0) * Number(map.tileheight ?? 0);
   const layers = new Map((map.layers ?? []).map((layer) => [layer.name, layer]));
+  const imageLayers = (map.layers ?? []).filter((layer) => layer.type === "imagelayer");
   const walls = objects(layers, "collision", "wall");
   const props = objects(layers, "props", "prop");
   const investigatorSpawns = objects(layers, "spawns", "investigatorSpawn");
@@ -54,6 +55,7 @@ function renderPreview(map, source) {
   const batteries = objects(layers, "batteries", "batterySpawn");
   const labels = objects(layers, "labels", "label");
   const title = escapeXml(property(map, "name", map.name || "Untitled Map"));
+  const mapDir = dirname(mapPath);
 
   const grid = makeGrid(width, height, Number(map.tilewidth ?? 32), Number(map.tileheight ?? 32));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title} map preview">
@@ -64,6 +66,9 @@ function renderPreview(map, source) {
   </defs>
   <rect width="${width}" height="${height}" fill="#12181d"/>
   <rect x="0" y="0" width="${width}" height="${height}" fill="url(#gridPattern)" opacity="0"/>
+  <g id="image-layers">
+${imageLayers.map((layer) => imageLayer(layer, mapDir)).join("\n")}
+  </g>
 ${grid}
   <text x="24" y="38" fill="#dff7ff" font-size="24" font-family="Arial, sans-serif" font-weight="700">${title}</text>
   <text x="24" y="62" fill="#9fb2bd" font-size="13" font-family="Arial, sans-serif">${escapeXml(source)}</text>
@@ -89,6 +94,7 @@ ${labels.map(label).join("\n")}
     ${legendItem(24, height - 44, "#7ae4d6", "Investigator Spawn")}
     ${legendItem(202, height - 44, "#e76f8a", "Anomaly Spawn")}
     ${legendItem(360, height - 44, "#f4e15d", "Battery")}
+    ${legendItem(466, height - 44, "#88a5b5", "Image Layer")}
   </g>
 </svg>
 `;
@@ -103,7 +109,8 @@ ${labels.map(label).join("\n")}
       investigatorSpawns: investigatorSpawns.length,
       anomalySpawns: anomalySpawns.length,
       batteries: batteries.length,
-      labels: labels.length
+      labels: labels.length,
+      imageLayers: imageLayers.length
     },
     svg
   };
@@ -115,6 +122,20 @@ function objects(layers, layerName, type) {
 
 function rect(object, fill, stroke) {
   return `    <rect x="${n(object.x)}" y="${n(object.y)}" width="${n(object.width)}" height="${n(object.height)}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+}
+
+function imageLayer(layer, mapDir) {
+  if (!layer.image || /^https?:\/\//i.test(layer.image)) {
+    return `    <rect x="0" y="0" width="100%" height="100%" fill="rgba(136,165,181,0.08)" stroke="rgba(136,165,181,0.32)" stroke-width="2"/>`;
+  }
+  const imagePath = resolve(mapDir, layer.image);
+  const href = relative(distRoot, imagePath).replaceAll("\\", "/");
+  const x = n(layer.x ?? layer.offsetx ?? 0);
+  const y = n(layer.y ?? layer.offsety ?? 0);
+  const width = Number.isFinite(layer.imagewidth ?? layer.width) ? n(layer.imagewidth ?? layer.width) : "100%";
+  const height = Number.isFinite(layer.imageheight ?? layer.height) ? n(layer.imageheight ?? layer.height) : "100%";
+  const opacity = Number.isFinite(layer.opacity) ? layer.opacity : 0.72;
+  return `    <image href="${escapeXml(href)}" x="${x}" y="${y}" width="${width}" height="${height}" opacity="${n(opacity)}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
 function marker(object, fill, text) {
@@ -146,13 +167,13 @@ function makeGrid(width, height, tileWidth, tileHeight) {
 }
 
 function makeIndex(previews) {
-  const rows = previews.map((preview) => `| \`${preview.source}\` | [${preview.output}](${preview.output.replace(/^dist\/maps\/previews\//, "")}) | ${preview.width}x${preview.height} | ${preview.counts.walls} | ${preview.counts.investigatorSpawns} | ${preview.counts.batteries} |`).join("\n");
+  const rows = previews.map((preview) => `| \`${preview.source}\` | [${preview.output}](${preview.output.replace(/^dist\/maps\/previews\//, "")}) | ${preview.width}x${preview.height} | ${preview.counts.walls} | ${preview.counts.investigatorSpawns} | ${preview.counts.batteries} | ${preview.counts.imageLayers} |`).join("\n");
   return `# Map Previews
 
 Generated SVG previews for quick map-editor review.
 
-| Source | Preview | Size | Walls | Investigator Spawns | Batteries |
-|---|---|---:|---:|---:|---:|
+| Source | Preview | Size | Walls | Investigator Spawns | Batteries | Image Layers |
+|---|---|---:|---:|---:|---:|---:|
 ${rows}
 `;
 }

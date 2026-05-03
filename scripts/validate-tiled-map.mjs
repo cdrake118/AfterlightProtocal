@@ -62,6 +62,7 @@ async function validateMap(source) {
   const warnings = [];
   const relativeSource = relative(root, absolutePath);
   const layers = new Map((map.layers ?? []).map((layer) => [layer.name, layer]));
+  const imageLayers = (map.layers ?? []).filter((layer) => layer.type === "imagelayer");
   const mapBounds = {
     x: 0,
     y: 0,
@@ -97,6 +98,7 @@ async function validateMap(source) {
   const anomalySpawns = objects(layers, "spawns", "anomalySpawn");
   const batteries = objects(layers, "batteries", "batterySpawn");
   const labels = objects(layers, "labels", "label");
+  const mapDir = dirname(absolutePath);
 
   if (walls.length < 4) errors.push("collision layer needs at least four wall rectangles");
   if (investigatorSpawns.length < 2) errors.push("spawns layer needs at least two investigatorSpawn points");
@@ -104,6 +106,22 @@ async function validateMap(source) {
   if (anomalySpawns.length !== 1) errors.push("spawns layer needs exactly one anomalySpawn point");
   if (batteries.length < 3) errors.push("batteries layer needs at least three batterySpawn points for healthy map rotation");
   if (labels.length < 2) warnings.push("add room labels to improve map readability while playtesting");
+
+  for (const layer of imageLayers) {
+    if (!layer.image || typeof layer.image !== "string") {
+      warnings.push(`image layer ${layer.name || "unnamed"} has no image path`);
+      continue;
+    }
+    if (/^https?:\/\//i.test(layer.image)) {
+      errors.push(`image layer ${layer.name || layer.image} must use a local project asset, not a remote URL`);
+      continue;
+    }
+    try {
+      await readFile(resolve(mapDir, layer.image));
+    } catch {
+      warnings.push(`image layer ${layer.name || layer.image} points to a missing local file: ${layer.image}`);
+    }
+  }
 
   for (const wall of walls) {
     validateRect(wall, mapBounds, errors, "wall");
@@ -142,7 +160,8 @@ async function validateMap(source) {
       investigatorSpawns: investigatorSpawns.length,
       anomalySpawns: anomalySpawns.length,
       batterySpawns: batteries.length,
-      labels: labels.length
+      labels: labels.length,
+      imageLayers: imageLayers.length
     },
     errors,
     warnings
@@ -204,7 +223,7 @@ function property(owner, name, fallback) {
 function makeMarkdown(data) {
   const rows = data.reports.map((report) => {
     const status = report.errors.length ? "Blocked" : report.warnings.length ? "Warnings" : "Ready";
-    return `| \`${report.source}\` | ${status} | ${report.pixelSize.width}x${report.pixelSize.height} | ${report.counts.walls} | ${report.counts.investigatorSpawns} | ${report.counts.batterySpawns} | ${[...report.errors, ...report.warnings].join(" ")} |`;
+    return `| \`${report.source}\` | ${status} | ${report.pixelSize.width}x${report.pixelSize.height} | ${report.counts.walls} | ${report.counts.investigatorSpawns} | ${report.counts.batterySpawns} | ${report.counts.imageLayers} | ${[...report.errors, ...report.warnings].join(" ")} |`;
   }).join("\n");
   return `# Tiled Map Validation
 
@@ -214,8 +233,8 @@ function makeMarkdown(data) {
 - Errors: ${data.summary.errors}
 - Warnings: ${data.summary.warnings}
 
-| Map | Status | Size | Walls | Investigator Spawns | Battery Spawns | Notes |
-|---|---|---:|---:|---:|---:|---|
+| Map | Status | Size | Walls | Investigator Spawns | Battery Spawns | Image Layers | Notes |
+|---|---|---:|---:|---:|---:|---:|---|
 ${rows}
 `;
 }
