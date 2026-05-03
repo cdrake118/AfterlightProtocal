@@ -2,6 +2,8 @@
 
 Use Tiled for the next-weekend map authoring workflow.
 
+Open `assets/maps/afterlight.tiled-project` in Tiled so object types, layer names, and map conventions stay consistent.
+
 ## Layers
 
 - `collision`: rectangle objects with type `wall`.
@@ -9,6 +11,14 @@ Use Tiled for the next-weekend map authoring workflow.
 - `spawns`: point objects with type `investigatorSpawn` or `anomalySpawn`.
 - `batteries`: point objects with type `batterySpawn`.
 - `labels`: point objects with type `label`.
+
+Run:
+
+```sh
+npm run maps:kit
+```
+
+This writes `dist/maps/map-editor-kit.json` and `.md`, summarizing the Tiled project, required object types, required layers, and authoring checklist.
 
 Run:
 

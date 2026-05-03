@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "objectTypes": [
+    {
+      "name": "wall",
+      "layer": "collision",
+      "shape": "rectangle",
+      "color": "#5f6b73",
+      "description": "Solid collision. Blocks players, beams, and pathfinding."
+    },
+    {
+      "name": "prop",
+      "layer": "props",
+      "shape": "rectangle",
+      "color": "#26323a",
+      "properties": [
+        { "name": "color", "type": "string", "default": "#26323a" }
+      ],
+      "description": "Readable furniture or obstacle decoration. Can also block line-of-sight when imported as a prop."
+    },
+    {
+      "name": "investigatorSpawn",
+      "layer": "spawns",
+      "shape": "point",
+      "color": "#7ae4d6",
+      "properties": [
+        { "name": "name", "type": "string", "default": "Investigator" },
+        { "name": "color", "type": "string", "default": "#7ae4d6" }
+      ],
+      "description": "Phone or host investigator starting point. Use two to five."
+    },
+    {
+      "name": "anomalySpawn",
+      "layer": "spawns",
+      "shape": "point",
+      "color": "#e76f8a",
+      "description": "Single anomaly starting point."
+    },
+    {
+      "name": "batterySpawn",
+      "layer": "batteries",
+      "shape": "point",
+      "color": "#f4e15d",
+      "description": "Potential battery pickup location. Use at least three."
+    },
+    {
+      "name": "label",
+      "layer": "labels",
+      "shape": "point",
+      "color": "#dff7ff",
+      "description": "Room label for readability and playtest callouts."
+    }
+  ]
+}
