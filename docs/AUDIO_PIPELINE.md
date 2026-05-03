@@ -32,6 +32,16 @@ npm run audio:audit
 
 This writes `dist/assets/audio-asset-audit.json` and `.md`, listing every required music/SFX slot, whether the file exists, its bus, loop setting, and size. The browser synth sounds remain fallback only; a high-quality party build should drive this audit toward zero missing files.
 
+## Candidate Intake
+
+Run:
+
+```sh
+npm run audio:candidate -- incoming/audio/flashlight-on.ogg --slot flashlight_on
+```
+
+This writes a candidate report into `dist/assets/audio-candidates/` from an incoming music or SFX file. It does not move files into runtime. Use it to confirm the manifest slot, target path, loop setting, bus, production intent, and next placement step before copying the file into `assets/audio/`.
+
 ## Production Briefs
 
 Run:
