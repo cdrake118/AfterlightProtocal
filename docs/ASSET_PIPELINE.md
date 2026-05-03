@@ -16,7 +16,7 @@ Run:
 npm run assets:review
 ```
 
-This runs the full character-art handoff chain: brief generation, atlas-template generation, runtime atlas validation, and PNG audit.
+This runs the full character-art handoff chain: brief generation, atlas-template generation, runtime atlas validation, runtime atlas preview, and PNG audit.
 
 Run:
 
@@ -42,6 +42,14 @@ npm run assets:audit
 
 This writes `dist/assets/art-asset-audit.json` and `.md`, listing every character PNG, whether it has alpha transparency, and whether it is safe to treat as a runtime atlas.
 
+Run:
+
+```sh
+npm run assets:atlas-preview
+```
+
+This writes SVG overlays into `dist/assets/atlas-previews/` for each atlas in `runtime-character-manifest.json`. Use these previews to catch cropped feet, drifting anchors, unsafe padding, and mislabeled animation rows before the asset appears in-game.
+
 ## Runtime Manifest Files
 
 - `assets/characters/runtime-character-manifest.json` lists the atlases allowed into packaged builds.
@@ -65,6 +73,7 @@ The validator rejects RGB/white-background PNGs because those caused the current
 Do not integrate a new character sheet until it passes both:
 
 - `npm run assets:validate`
+- `npm run assets:atlas-preview`
 - `npm run assets:audit`
 
 The audit may list concept/reference PNGs as not runtime-ready; that is fine. Runtime character atlases should be transparent PNGs with stable JSON metadata. Packaged builds should only include the runtime manifest and approved atlases.

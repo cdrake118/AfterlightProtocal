@@ -8,8 +8,10 @@ const jsonPath = join(distRoot, "content-pipeline-report.json");
 const markdownPath = join(distRoot, "content-pipeline-report.md");
 
 const reports = {
+  characterRuntimeManifest: await readOptional("assets/characters/runtime-character-manifest.json"),
   characterArt: await readOptional("dist/assets/art-asset-audit.json"),
   characterBriefs: await readOptional("dist/assets/character-art-brief.json"),
+  characterAtlasPreviews: await readOptional("dist/assets/atlas-previews/index.json"),
   mapValidation: await readOptional("dist/maps/tiled-map-validation.json"),
   mapLayout: await readOptional("dist/maps/map-layout-audit.json"),
   mapArt: await readOptional("dist/maps/map-art-audit.json"),
@@ -23,7 +25,9 @@ const output = {
   summary: {
     characterRuntimePngs: reports.characterArt?.summary?.productionReady ?? 0,
     characterPngsTotal: reports.characterArt?.summary?.totalPngs ?? 0,
+    characterRuntimeAtlases: reports.characterRuntimeManifest?.runtimeAtlases?.length ?? 0,
     characterBriefs: reports.characterBriefs?.briefs?.length ?? 0,
+    characterAtlasPreviews: reports.characterAtlasPreviews?.summary?.totalPreviews ?? 0,
     validMaps: reports.mapValidation?.summary?.validMaps ?? 0,
     totalMaps: reports.mapValidation?.summary?.totalMaps ?? 0,
     mapLayoutScore: reports.mapLayout?.summary?.averageScore ?? 0,
@@ -58,6 +62,10 @@ function makeRisks(data) {
   const art = data.characterArt?.summary;
   if (!art) risks.push("Run npm run assets:review to generate character art audit data.");
   else if (art.productionReady < art.totalPngs) risks.push(`${art.totalPngs - art.productionReady} character PNGs are source/reference only or need transparent re-export.`);
+
+  const atlasPreviews = data.characterAtlasPreviews?.summary;
+  if (!atlasPreviews) risks.push("Run npm run assets:atlas-preview to generate runtime atlas visual QA overlays.");
+  else if (atlasPreviews.totalPreviews < (data.characterRuntimeManifest?.runtimeAtlases?.length ?? 0)) risks.push("Runtime atlas preview count is lower than the runtime manifest atlas count.");
 
   const maps = data.mapValidation?.summary;
   if (!maps) risks.push("Run npm run maps:review to generate map validation data.");
@@ -94,6 +102,7 @@ function makeMarkdown(data) {
 |---|---:|---:|
 | Character runtime PNGs | ${data.summary.characterRuntimePngs} | ${data.summary.characterPngsTotal} |
 | Character art briefs | ${data.summary.characterBriefs} | ${data.summary.characterBriefs} |
+| Character atlas previews | ${data.summary.characterAtlasPreviews} | ${data.summary.characterRuntimeAtlases} |
 | Valid Tiled maps | ${data.summary.validMaps} | ${data.summary.totalMaps} |
 | Map layout score | ${data.summary.mapLayoutScore} | 100 |
 | Ready map art | ${data.summary.readyMapArt} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
