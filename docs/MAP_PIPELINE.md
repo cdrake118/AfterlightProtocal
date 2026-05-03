@@ -57,6 +57,14 @@ If the Tiled map includes image layers, the preview includes them underneath gam
 Run:
 
 ```sh
+npm run maps:layout
+```
+
+This writes `dist/maps/map-layout-audit.json` and `.md`. It is a non-blocking design-quality report for map review: spawn spread, opening anomaly sightlines, battery access, collision coverage, and prop coverage. Use it to spot maps that are technically valid but likely too open, empty, or visually obvious.
+
+Run:
+
+```sh
 npm run maps:validate
 ```
 

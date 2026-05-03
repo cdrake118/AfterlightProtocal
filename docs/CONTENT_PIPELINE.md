@@ -6,7 +6,7 @@ Run:
 npm run content:review
 ```
 
-This runs the character asset review, map review, audio brief/audit pass, and writes:
+This runs the character asset review, map review, map layout audit, audio brief/audit pass, and writes:
 
 - `dist/content/content-pipeline-report.json`
 - `dist/content/content-pipeline-report.md`

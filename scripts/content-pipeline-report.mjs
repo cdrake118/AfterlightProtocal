@@ -11,6 +11,7 @@ const reports = {
   characterArt: await readOptional("dist/assets/art-asset-audit.json"),
   characterBriefs: await readOptional("dist/assets/character-art-brief.json"),
   mapValidation: await readOptional("dist/maps/tiled-map-validation.json"),
+  mapLayout: await readOptional("dist/maps/map-layout-audit.json"),
   mapArt: await readOptional("dist/maps/map-art-audit.json"),
   audioBriefs: await readOptional("dist/assets/audio-brief.json"),
   audio: await readOptional("dist/assets/audio-asset-audit.json")
@@ -25,6 +26,8 @@ const output = {
     characterBriefs: reports.characterBriefs?.briefs?.length ?? 0,
     validMaps: reports.mapValidation?.summary?.validMaps ?? 0,
     totalMaps: reports.mapValidation?.summary?.totalMaps ?? 0,
+    mapLayoutScore: reports.mapLayout?.summary?.averageScore ?? 0,
+    mapLayoutWarnings: reports.mapLayout?.summary?.totalWarnings ?? 0,
     plannedMapArt: reports.mapArt?.summary?.planned ?? 0,
     readyMapArt: reports.mapArt?.summary?.ready ?? 0,
     audioBriefs: reports.audioBriefs?.summary?.totalSlots ?? 0,
@@ -60,6 +63,10 @@ function makeRisks(data) {
   if (!maps) risks.push("Run npm run maps:review to generate map validation data.");
   else if (maps.errors > 0) risks.push(`${maps.errors} map validation errors need fixing before party testing.`);
 
+  const mapLayout = data.mapLayout?.summary;
+  if (!mapLayout) risks.push("Run npm run maps:layout to generate map design-quality data.");
+  else if (mapLayout.totalWarnings > 0) risks.push(`${mapLayout.totalWarnings} map layout warnings need designer review before party testing.`);
+
   const mapArt = data.mapArt?.summary;
   if (!mapArt) risks.push("Run npm run maps:art to generate map art audit data.");
   else if (mapArt.ready === 0 && mapArt.planned > 0) risks.push("Map background art is planned but no rendered map plate is ready yet.");
@@ -88,6 +95,7 @@ function makeMarkdown(data) {
 | Character runtime PNGs | ${data.summary.characterRuntimePngs} | ${data.summary.characterPngsTotal} |
 | Character art briefs | ${data.summary.characterBriefs} | ${data.summary.characterBriefs} |
 | Valid Tiled maps | ${data.summary.validMaps} | ${data.summary.totalMaps} |
+| Map layout score | ${data.summary.mapLayoutScore} | 100 |
 | Ready map art | ${data.summary.readyMapArt} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
 | Audio production briefs | ${data.summary.audioBriefs} | ${data.summary.audioTotal || data.summary.audioBriefs} |
 | Audio files | ${data.summary.audioReady} | ${data.summary.audioTotal} |
