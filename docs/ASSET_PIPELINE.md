@@ -21,6 +21,14 @@ This writes `dist/assets/character-art-brief.json` and `.md` from `assets/charac
 Run:
 
 ```sh
+npm run assets:atlas-templates
+```
+
+This writes starter atlas JSON files into `dist/assets/atlas-templates/` from the character art briefs. They are handoff templates, not runtime assets; copy and adjust them only after the matching transparent PNG sheet exists.
+
+Run:
+
+```sh
 npm run assets:audit
 ```
 
