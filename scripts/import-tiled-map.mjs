@@ -1,9 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, extname, resolve } from "node:path";
 
 const source = process.argv[2];
 if (!source) {
   throw new Error("Usage: node scripts/import-tiled-map.mjs <map.tiled.json> [--write <output.json>]");
+}
+if (extname(source) !== ".json" || !source.endsWith(".tiled.json")) {
+  throw new Error("Tiled source maps must use the `.tiled.json` suffix");
 }
 const writeIndex = process.argv.indexOf("--write");
 const output = writeIndex >= 0 ? process.argv[writeIndex + 1] : null;
