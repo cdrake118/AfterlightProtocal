@@ -29,6 +29,14 @@ This writes `dist/assets/character-art-brief.json` and `.md` from `assets/charac
 Run:
 
 ```sh
+npm run assets:atlas-handoff
+```
+
+This writes `dist/assets/character-atlas-handoff/` with one SVG production guide and Markdown handoff per planned character atlas. Use these guides for image generation, Aseprite cleanup, or TexturePacker framing: they show exact canvas bounds, fixed cells, row labels, safe padding, anchors, and foot baselines so oversized heads, missing feet, and drifting sprites are caught before runtime.
+
+Run:
+
+```sh
 npm run assets:atlas-templates
 ```
 

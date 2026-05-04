@@ -12,6 +12,7 @@ const reports = {
   characterRuntimeManifest: await readOptional("assets/characters/runtime-character-manifest.json"),
   characterArt: await readOptional("dist/assets/art-asset-audit.json"),
   characterBriefs: await readOptional("dist/assets/character-art-brief.json"),
+  characterAtlasHandoff: await readOptional("dist/assets/character-atlas-handoff/index.json"),
   characterAtlasPreviews: await readOptional("dist/assets/atlas-previews/index.json"),
   mapValidation: await readOptional("dist/maps/tiled-map-validation.json"),
   mapLayout: await readOptional("dist/maps/map-layout-audit.json"),
@@ -29,6 +30,7 @@ const output = {
     characterPngsTotal: reports.characterArt?.summary?.totalPngs ?? 0,
     characterRuntimeAtlases: reports.characterRuntimeManifest?.runtimeAtlases?.length ?? 0,
     characterBriefs: reports.characterBriefs?.briefs?.length ?? 0,
+    characterAtlasHandoffs: reports.characterAtlasHandoff?.summary?.total ?? 0,
     characterAtlasPreviews: reports.characterAtlasPreviews?.summary?.totalPreviews ?? 0,
     validMaps: reports.mapValidation?.summary?.validMaps ?? 0,
     totalMaps: reports.mapValidation?.summary?.totalMaps ?? 0,
@@ -74,6 +76,9 @@ function makeRisks(data) {
   else if (art.productionReady < art.totalPngs) risks.push(`${art.totalPngs - art.productionReady} character PNGs are source/reference only or need transparent re-export.`);
 
   const atlasPreviews = data.characterAtlasPreviews?.summary;
+  const atlasHandoff = data.characterAtlasHandoff?.summary;
+  if (!atlasHandoff) risks.push("Run npm run assets:atlas-handoff to generate character atlas production guides.");
+
   if (!atlasPreviews) risks.push("Run npm run assets:atlas-preview to generate runtime atlas visual QA overlays.");
   else if (atlasPreviews.totalPreviews < (data.characterRuntimeManifest?.runtimeAtlases?.length ?? 0)) risks.push("Runtime atlas preview count is lower than the runtime manifest atlas count.");
 
@@ -109,6 +114,7 @@ function makeNextActions(data) {
   const intake = data.contentIntake?.summary;
   const runtimeAtlases = data.characterRuntimeManifest?.runtimeAtlases?.length ?? 0;
   const investigatorBrief = data.characterBriefs?.briefs?.find((brief) => brief.id === "investigator-production-atlas");
+  const investigatorHandoff = data.characterAtlasHandoff?.handoffs?.find((handoff) => handoff.id === "investigator-production-atlas");
   const mapArt = data.mapArt?.summary;
   const mapArtHandoff = data.mapArtHandoff?.handoffs?.find((handoff) => handoff.id === "manor-party-render");
   const audio = data.audio?.summary;
@@ -133,7 +139,7 @@ function makeNextActions(data) {
       action: "Produce one validated investigator runtime atlas so phone players no longer rely on source-only generated sheets.",
       command: "npm run assets:review",
       doneWhen: "The investigator PNG is transparent, has matching atlas JSON, appears in runtime-character-manifest.json, and atlas previews show clean feet/anchors.",
-      source: investigatorBrief?.targetAtlas ?? "assets/characters/character-art-briefs.json"
+      source: investigatorHandoff?.markdown ?? investigatorBrief?.targetAtlas ?? "assets/characters/character-art-briefs.json"
     });
   } else if (runtimeAtlases < 2) {
     actions.push({
@@ -221,6 +227,7 @@ function makeMarkdown(data) {
 |---|---:|---:|
 | Character runtime PNGs | ${data.summary.characterRuntimePngs} | ${data.summary.characterPngsTotal} |
 | Character art briefs | ${data.summary.characterBriefs} | ${data.summary.characterBriefs} |
+| Character atlas handoffs | ${data.summary.characterAtlasHandoffs} | ${data.summary.characterBriefs} |
 | Character atlas previews | ${data.summary.characterAtlasPreviews} | ${data.summary.characterRuntimeAtlases} |
 | Valid Tiled maps | ${data.summary.validMaps} | ${data.summary.totalMaps} |
 | Map layout score | ${data.summary.mapLayoutScore} | 100 |
