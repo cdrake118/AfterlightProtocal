@@ -91,6 +91,19 @@ This creates separate host and client platform adapters, connects the client to 
 
 The test is internet-free by design, but it is no longer transport-free. Steam Networking Sockets, Steam Networking Messages, Epic Online Services, or a custom relay should be able to replace the loopback transport while keeping these message names and reliability expectations intact.
 
+Run:
+
+```sh
+npm run party:server-smoke
+```
+
+This boots the real Node party server on a temporary local port and verifies the next-weekend phone-controller path:
+
+- `/healthz`, `/rooms`, `/diagnostics`, `/host`, and `/join?code=ROOM` respond.
+- A host can create a Socket.IO room with a QR-ready join URL.
+- A phone client can join the room with a role and skin.
+- Phone joystick/action input relays to the host as sanitized `phone:input` data.
+
 ## Lobby UX Contract
 
 - Host creates a private lobby with a short invite code.
