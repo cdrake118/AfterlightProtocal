@@ -16,6 +16,7 @@ const reports = {
   mapValidation: await readOptional("dist/maps/tiled-map-validation.json"),
   mapLayout: await readOptional("dist/maps/map-layout-audit.json"),
   mapArt: await readOptional("dist/maps/map-art-audit.json"),
+  mapArtHandoff: await readOptional("dist/maps/map-art-handoff/index.json"),
   audioBriefs: await readOptional("dist/assets/audio-brief.json"),
   audio: await readOptional("dist/assets/audio-asset-audit.json")
 };
@@ -35,6 +36,7 @@ const output = {
     mapLayoutWarnings: reports.mapLayout?.summary?.totalWarnings ?? 0,
     plannedMapArt: reports.mapArt?.summary?.planned ?? 0,
     readyMapArt: reports.mapArt?.summary?.ready ?? 0,
+    mapArtHandoffs: reports.mapArtHandoff?.summary?.total ?? 0,
     audioBriefs: reports.audioBriefs?.summary?.totalSlots ?? 0,
     audioReady: reports.audio?.summary?.ready ?? 0,
     audioTotal: reports.audio?.summary?.totalSlots ?? 0,
@@ -84,8 +86,11 @@ function makeRisks(data) {
   else if (mapLayout.totalWarnings > 0) risks.push(`${mapLayout.totalWarnings} map layout warnings need designer review before party testing.`);
 
   const mapArt = data.mapArt?.summary;
+  const mapArtHandoff = data.mapArtHandoff?.summary;
   if (!mapArt) risks.push("Run npm run maps:art to generate map art audit data.");
   else if (mapArt.ready === 0 && mapArt.planned > 0) risks.push("Map background art is planned but no rendered map plate is ready yet.");
+
+  if (!mapArtHandoff) risks.push("Run npm run maps:art-handoff to generate map paintover guides.");
 
   const audio = data.audio?.summary;
   const audioBriefs = data.audioBriefs?.summary;
@@ -105,6 +110,7 @@ function makeNextActions(data) {
   const runtimeAtlases = data.characterRuntimeManifest?.runtimeAtlases?.length ?? 0;
   const investigatorBrief = data.characterBriefs?.briefs?.find((brief) => brief.id === "investigator-production-atlas");
   const mapArt = data.mapArt?.summary;
+  const mapArtHandoff = data.mapArtHandoff?.handoffs?.find((handoff) => handoff.id === "manor-party-render");
   const audio = data.audio?.summary;
   const maps = data.mapValidation?.summary;
   const mapLayout = data.mapLayout?.summary;
@@ -147,7 +153,7 @@ function makeNextActions(data) {
       action: "Render the Manor party-test background plate and wire it as a local Tiled image layer.",
       command: "npm run maps:review",
       doneWhen: "map-art audit reports one ready plate and the Tiled preview shows image art under collision/spawn overlays.",
-      source: "assets/maps/map-art-manifest.json"
+      source: mapArtHandoff?.markdown ?? "assets/maps/map-art-manifest.json"
     });
   }
 
@@ -219,6 +225,7 @@ function makeMarkdown(data) {
 | Valid Tiled maps | ${data.summary.validMaps} | ${data.summary.totalMaps} |
 | Map layout score | ${data.summary.mapLayoutScore} | 100 |
 | Ready map art | ${data.summary.readyMapArt} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
+| Map art handoffs | ${data.summary.mapArtHandoffs} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
 | Audio production briefs | ${data.summary.audioBriefs} | ${data.summary.audioTotal || data.summary.audioBriefs} |
 | Audio files | ${data.summary.audioReady} | ${data.summary.audioTotal} |
 | Incoming candidates | ${data.summary.incomingCandidates} | ${data.summary.incomingCandidates + data.summary.incomingNeedsCleanup} |

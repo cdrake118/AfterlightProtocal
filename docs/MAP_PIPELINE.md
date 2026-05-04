@@ -32,6 +32,14 @@ This writes `dist/maps/map-art-brief.json` and `.md` from the map art manifest, 
 Run:
 
 ```sh
+npm run maps:art-handoff
+```
+
+This writes `dist/maps/map-art-handoff/` with one SVG guide and Markdown handoff per planned map plate. The SVG is a paintover/alignment guide for map artists or image-generation cleanup: exact canvas bounds, grid, collision walls, large props, spawn context, battery context, and labels. Use the guide to create the rendered PNG, then keep gameplay collision and spawns in Tiled object layers.
+
+Run:
+
+```sh
 npm run maps:art
 ```
 

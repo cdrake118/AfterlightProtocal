@@ -35,7 +35,8 @@ const output = {
     fullReadiness: "npm run party:readiness",
     hostServer: "npm run serve:party",
     contentReview: "npm run content:review",
-    multiplayerSmoke: "npm run smoke:multiplayer"
+    multiplayerSmoke: "npm run smoke:multiplayer",
+    partyServerSmoke: "npm run party:server-smoke"
   }
 };
 
@@ -125,6 +126,12 @@ function makeChecks(data) {
     area: "Multiplayer Contract",
     status: "ready",
     detail: "npm run party:readiness runs the multiplayer contract smoke before writing this report."
+  });
+
+  checks.push({
+    area: "Party Server",
+    status: "ready",
+    detail: "npm run party:readiness runs the live /host plus /join Socket.IO smoke before writing this report."
   });
 
   return checks;
