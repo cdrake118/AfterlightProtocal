@@ -56,6 +56,14 @@ This writes a candidate map-art report into `dist/maps/map-art-candidates/` from
 Run:
 
 ```sh
+npm run maps:art-install -- incoming/maps/manor-party-render.png --map-id manor-party-render --dry-run
+```
+
+This validates a final rendered PNG against the map art manifest, then reports the exact changes needed to promote it. Remove `--dry-run` to copy the PNG into `assets/maps/`, mark the manifest entry ready, and add or replace the Tiled `art-background` image layer under collision/spawn overlays. After installing, run `npm run maps:review` and inspect the generated map preview for alignment.
+
+Run:
+
+```sh
 npm run maps:kit
 ```
 
