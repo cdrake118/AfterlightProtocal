@@ -72,6 +72,22 @@ This writes `dist/maps/map-editor-kit.json` and `.md`, summarizing the Tiled pro
 Run:
 
 ```sh
+npm run maps:new -- --id manor-v2 --image incoming/maps/manor-v2.png --dry-run
+```
+
+This creates a correctly layered Tiled map scaffold from a rendered PNG plate. Dry-run mode writes a preview map and report into `dist/maps/new-tiled-map/` without touching runtime assets. The scaffold includes the `art-background` image layer plus starter `collision`, `props`, `spawns`, `batteries`, and `labels` object layers, so the map designer can immediately open it in Tiled and refine walls, boundaries, decorations, spawn points, and battery points.
+
+When the dry-run report looks right, remove `--dry-run`:
+
+```sh
+npm run maps:new -- --id manor-v2 --image incoming/maps/manor-v2.png
+```
+
+Use `--force` only when intentionally replacing a draft Tiled source. After creating a scaffold, run `npm run maps:validate -- assets/maps/manor-v2.tiled.json` and inspect `node scripts/render-map-preview.mjs assets/maps/manor-v2.tiled.json`.
+
+Run:
+
+```sh
 npm run maps:preview
 ```
 
