@@ -22,4 +22,5 @@ Use this report before inviting testers. It focuses on the couch-party path rath
 - Show the laptop on the TV with HDMI first; AirPlay is the fallback.
 - Phones join with the QR code or room URL.
 - Run `npm run party:deploy-check` before pushing a Railway-hosted room URL to guests.
+- After Railway deploys, run `npm run party:remote-smoke -- --url https://YOUR-RAILWAY-DOMAIN` to verify the public phone-controller path.
 - Run `npm run party:server-smoke` before guests arrive to verify the host page, phone controller page, diagnostics routes, room creation, and phone input relay.

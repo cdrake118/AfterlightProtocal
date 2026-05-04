@@ -38,6 +38,7 @@ const output = {
     contentReview: "npm run content:review",
     multiplayerSmoke: "npm run smoke:multiplayer",
     deployCheck: "npm run party:deploy-check",
+    remoteSmoke: "npm run party:remote-smoke -- --url https://YOUR-RAILWAY-DOMAIN",
     partyServerSmoke: "npm run party:server-smoke"
   }
 };

@@ -25,6 +25,7 @@ const checks = [
   check("Party Serve Script", packageJson.scripts?.["serve:party"] === "node server.js", "Local party server entrypoint matches production."),
   check("Party Readiness Script", Boolean(packageJson.scripts?.["party:readiness"]), "party:readiness exists for pre-party checks."),
   check("Party Server Smoke", Boolean(packageJson.scripts?.["party:server-smoke"]), "party:server-smoke exists for host/phone relay checks."),
+  check("Remote Party Smoke", Boolean(packageJson.scripts?.["party:remote-smoke"]), "party:remote-smoke exists for deployed Railway URL checks."),
   check("Socket.IO Dependency", Boolean(packageJson.dependencies?.["socket.io"]), "Socket.IO server dependency is declared."),
   check("Socket.IO Client Dependency", Boolean(packageJson.dependencies?.["socket.io-client"]), "Socket.IO client dependency is declared for local smoke tests."),
   check("QR Dependency", Boolean(packageJson.dependencies?.qrcode), "QR code dependency is declared for phone join links."),
@@ -55,7 +56,8 @@ const output = {
     "Run npm run party:readiness locally before deploying.",
     "Connect the GitHub repo to Railway and deploy the main branch.",
     "Confirm Railway exposes a public domain for the service.",
-    "Open https://YOUR-RAILWAY-DOMAIN/healthz and confirm ok true.",
+    "Run npm run party:remote-smoke -- --url https://YOUR-RAILWAY-DOMAIN.",
+    "Open https://YOUR-RAILWAY-DOMAIN/healthz and confirm ok true if the remote smoke fails.",
     "Open https://YOUR-RAILWAY-DOMAIN/host on the laptop, create a room, and scan the QR code from one phone.",
     "Run a one-phone controller smoke before guests arrive."
   ]

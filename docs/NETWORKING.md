@@ -107,6 +107,19 @@ This verifies the Railway-facing deployment contract before a party test:
 Run:
 
 ```sh
+npm run party:remote-smoke -- --url https://YOUR-RAILWAY-DOMAIN
+```
+
+This verifies a deployed public party server:
+
+- `/healthz`, `/rooms`, `/diagnostics`, `/host`, and `/join?code=ROOM` respond over the public URL.
+- A remote host socket can create a room with a QR-ready join URL.
+- A remote phone socket can join the room.
+- Phone joystick/action input relays back to the remote host socket.
+
+Run:
+
+```sh
 npm run party:server-smoke
 ```
 
