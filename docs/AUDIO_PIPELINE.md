@@ -42,6 +42,24 @@ npm run audio:candidate -- incoming/audio/flashlight-on.ogg --slot flashlight_on
 
 This writes a candidate report into `dist/assets/audio-candidates/` from an incoming music or SFX file. It does not move files into runtime. Use it to confirm the manifest slot, target path, loop setting, bus, production intent, and next placement step before copying the file into `assets/audio/`.
 
+## Runtime Install
+
+After a candidate is approved, dry-run the install:
+
+```sh
+npm run audio:install -- incoming/audio/flashlight-on.ogg --slot flashlight_on --dry-run
+```
+
+This writes an install report into `dist/assets/audio-install/`, validates the `.ogg` or `.mp3` header, checks the target directory, confirms the slot, and shows the exact copy/manifest changes. Dry-run mode does not move files.
+
+When the report is clean, promote the final file:
+
+```sh
+npm run audio:install -- incoming/audio/flashlight-on.ogg --slot flashlight_on
+```
+
+By default, the installer copies the file to the target path already listed in `assets/audio/audio-manifest.json`. If a final file must use a different runtime filename, pass `--target assets/audio/sfx/new-name.ogg`; the installer will update the manifest in write mode.
+
 ## Production Briefs
 
 Run:
