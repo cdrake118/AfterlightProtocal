@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Afterlight Protocol Prototype</title>
-    <link rel="stylesheet" href="styles.css?v=20260502-08">
+    <link rel="stylesheet" href="styles.css?v=20260502-09">
   </head>
   <body>
     <main class="shell">
@@ -12,13 +12,13 @@
         <canvas id="game" width="1280" height="720"></canvas>
         <section class="main-menu-panel" id="mainMenuPanel" aria-label="Main menu">
           <div class="main-menu-content">
-            <span class="label">Afterlight Protocol</span>
             <h1>Afterlight Protocol</h1>
-            <p>Enter the facility, choose a side, and keep the hunt readable.</p>
+            <p>Play as a team of investigators, or the anomaly, and hunt each other!</p>
             <div class="main-menu-actions">
               <button id="startBtn" class="primary-button" type="button">Start</button>
               <button id="menuHelpBtn" type="button">How to Play</button>
               <button id="settingsBtn" type="button">Settings</button>
+              <a class="menu-link" href="guide.html" target="_blank" rel="noreferrer">Guide</a>
             </div>
           </div>
         </section>
@@ -103,6 +103,7 @@
               <details class="setup-tools">
                 <summary>Invite & Tools</summary>
                 <div class="advanced-menu" aria-label="Invite and tools">
+                  <p class="controller-connect-hint">Controller connect: scan the QR from <strong>Host</strong> or open the join link, enter room code, then tap Ready.</p>
                   <label class="invite-control">
                     <span>Invite</span>
                     <input id="inviteInput" type="text" inputmode="text" autocomplete="off" maxlength="8" placeholder="CODE">

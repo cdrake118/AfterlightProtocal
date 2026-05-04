@@ -4133,7 +4133,7 @@ function drawAnomaly(anomaly) {
   const stealthPhase = state.phase === "playing" || state.phase === "countdown";
   const escapeVisibility = getAnomalyEscapeVisibility(anomaly);
   const alpha = playerRole === "Anomaly" && stealthPhase
-    ? (anomaly.revealed > aiAnomalyVisibleThreshold ? 1 : 0.5)
+    ? (anomaly.revealed > aiAnomalyVisibleThreshold ? 1 : 0.4)
     : stealthPhase
       ? Math.max(anomaly.revealed, escapeVisibility)
       : 0.72;

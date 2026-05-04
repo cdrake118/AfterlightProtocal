@@ -29,7 +29,7 @@
     "party:deploy-check": "node scripts/party-deploy-check.mjs",
     "party:remote-smoke": "node scripts/party-remote-smoke.mjs",
     "party:server-smoke": "node scripts/party-server-smoke.mjs",
-    "party:readiness": "npm run content:review && npm run smoke:multiplayer && npm run party:deploy-check && npm run party:server-smoke && node scripts/party-build-readiness.mjs",
+    "party:readiness": "npm run content:review && npm run smoke:multiplayer && npm run party:deploy-check && npm run party:server-smoke && node scripts/party-build-readiness.mjs && npm run party:content-punchlist",
     "maps:kit": "node scripts/map-editor-kit.mjs",
     "maps:new": "node scripts/new-tiled-map.mjs",
     "maps:art": "node scripts/validate-map-art.mjs",
@@ -60,7 +60,8 @@
     "network:protocol": "node scripts/network-protocol.mjs",
     "network:check": "node scripts/network-protocol-check.mjs",
     "replay:check": "node scripts/replay-link-check.mjs",
-    "submission:packet": "npm run localization:kit && npm run config:check && npm run network:protocol && npm run replay:check && node scripts/playtest-feedback-intake.mjs && node scripts/store-capture-plan.mjs && node scripts/submission-packet.mjs"
+    "submission:packet": "npm run localization:kit && npm run config:check && npm run network:protocol && npm run replay:check && node scripts/playtest-feedback-intake.mjs && node scripts/store-capture-plan.mjs && node scripts/submission-packet.mjs",
+    "party:content-punchlist": "node scripts/party-content-punchlist.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

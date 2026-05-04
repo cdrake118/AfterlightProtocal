@@ -522,6 +522,19 @@ meter::-webkit-meter-optimum-value {
   border-color: rgba(122, 228, 214, 0.42);
 }
 
+
+.controller-connect-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(226, 238, 246, 0.12);
+  border-radius: 8px;
+  background: rgba(18, 27, 34, 0.65);
+  color: #cfe0ea;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .advanced-menu button,
 .advanced-menu .invite-control,
 .advanced-menu .seed-control {
@@ -1610,4 +1623,21 @@ meter::-webkit-meter-optimum-value {
     max-height: 48%;
     overflow: auto;
   }
+}
+
+
+.menu-link {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:42px;
+  padding:0.55rem 1rem;
+  border-radius:10px;
+  border:1px solid rgba(120,180,255,.32);
+  color:#dcebff;
+  text-decoration:none;
+  background:rgba(18,30,54,.72);
+}
+.menu-link:hover {
+  background:rgba(34,58,97,.78);
 }

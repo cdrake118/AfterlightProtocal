@@ -100,3 +100,12 @@ Store page kit generation uses environment variables:
 ## Future Platforms
 
 The adapter model allows future support for Epic Online Services, console platform APIs, or a custom account backend without rewriting game rules.
+
+## Builder/Admin Panel Plan
+
+To keep gameplay UI simple while still supporting map/editor/admin tools, add a separate password-protected builder/admin surface:
+
+- `/admin` web route for map builder, asset upload, room diagnostics, moderation actions, and content toggles.
+- Password-protected session gate for v1; later replace with account roles and server-issued tokens.
+- Keep runtime gameplay clients read-only for these tools (no admin controls in the match HUD).
+- Add audit logs for asset uploads, map publishes, and room management actions.

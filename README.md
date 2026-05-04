@@ -28,6 +28,13 @@ Then open `http://127.0.0.1:5173/host` on the laptop display. Use HDMI or AirPla
 
 Click `Host` to create a phone-controller room. Phones can scan the QR code or open `/join?code=ROOM`. The host browser remains match-authoritative for this next-weekend milestone; the server relays lobby state and phone inputs.
 
+Controller connection flow:
+
+1. Host opens `/host` and presses `Host`.
+2. Share the QR/link shown in the host panel.
+3. Phone opens `/join`, enters the room code (if needed), picks role/skin, and taps `Ready`.
+4. Host starts once the lobby is ready.
+
 Railway can run the same entrypoint:
 
 ```sh

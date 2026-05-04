@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Afterlight Protocol | Game Guide</title>
+    <link rel="stylesheet" href="styles.css?v=20260502-09">
+    <style>
+      .guide-shell { max-width: 980px; margin: 1.5rem auto; padding: 1rem; color: #eaf2ff; }
+      .guide-card { background: rgba(5,10,20,.86); border: 1px solid rgba(130,180,255,.24); border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: .9rem; }
+      .guide-card h2 { margin: .2rem 0 .7rem; }
+      .guide-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: .8rem; }
+      .guide-card ul { margin: .5rem 0; padding-left: 1.1rem; }
+      .guide-links a { color: #9ed0ff; text-decoration: none; }
+      .guide-links a:hover { text-decoration: underline; }
+      .guide-top { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+    </style>
+  </head>
+  <body>
+    <main class="guide-shell">
+      <section class="guide-card guide-top">
+        <div>
+          <p class="label">Afterlight Protocol</p>
+          <h1>Game Guide & Technical Overview</h1>
+          <p>Quick reference for players, hosts, and builders.</p>
+        </div>
+        <a href="/host" class="primary-button">Launch Host</a>
+      </section>
+
+      <section class="guide-card">
+        <h2>How the Game Works</h2>
+        <div class="guide-grid">
+          <article>
+            <h3>Investigators</h3>
+            <ul>
+              <li>Search with flashlights and drain Anomaly Health to 0.</li>
+              <li>Manage battery economy and revive teammates by proximity.</li>
+              <li>Use warning cues and map knowledge to predict ghost movement.</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Anomaly</h3>
+            <ul>
+              <li>Stay hidden and grab investigators to collapse the team.</li>
+              <li>Use Blackout strategically to disrupt vision and pressure batteries.</li>
+              <li>Break line of sight and exploit map corners/rooms.</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Round Rules</h3>
+            <ul>
+              <li>Anomaly wins by collapsing all investigators.</li>
+              <li>Investigators win by draining Anomaly Health.</li>
+              <li>If time expires, the round ends in a draw.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="guide-card">
+        <h2>High-Level Technical Architecture</h2>
+        <div class="guide-grid">
+          <article>
+            <h3>Host Display</h3>
+            <ul>
+              <li><code>/host</code> runs the authoritative match simulation in-browser.</li>
+              <li>Displayed on laptop/TV (HDMI preferred, AirPlay fallback).</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Party Server</h3>
+            <ul>
+              <li>Node + Socket.IO relay for room codes, lobby state, and phone input.</li>
+              <li>Railway-ready deployment with health and diagnostics routes.</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Phone Controllers</h3>
+            <ul>
+              <li><code>/join?code=XXXX</code> connects players to a room.</li>
+              <li>Sends joystick/button input; host maps input to in-game roles.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="guide-card guide-links">
+        <h2>Important Links</h2>
+        <ul>
+          <li><a href="/host">Host Screen</a></li>
+          <li><a href="/join">Phone Controller Join Screen</a></li>
+          <li><a href="/diagnostics">Room Diagnostics</a></li>
+          <li><a href="/rooms">Room API (JSON)</a></li>
+          <li><a href="assets/maps/manor-party.tiled.json">Map Source (Tiled JSON)</a></li>
+          <li><a href="docs/MAP_PIPELINE.md">Map Designer/Builder Workflow</a></li>
+          <li><a href="docs/ASSET_PIPELINE.md">Artwork Asset Pipeline</a></li>
+          <li><a href="docs/AUDIO_PIPELINE.md">Audio/Music Pipeline</a></li>
+          <li><a href="docs/CONTENT_PIPELINE.md">Content Readiness Review</a></li>
+          <li><a href="docs/PARTY_BUILD.md">Party Build Checklist</a></li>
+          <li><a href="docs/NETWORKING.md">Networking Overview</a></li>
+        </ul>
+        <p><strong>Analytics:</strong> planned next as a Railway-backed event dashboard (currently tracked via local/content reports).</p>
+      </section>
+    </main>
+  </body>
+</html>
