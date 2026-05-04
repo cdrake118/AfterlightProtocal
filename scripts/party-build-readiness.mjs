@@ -9,8 +9,9 @@ const markdownPath = join(distRoot, "party-build-readiness.md");
 
 const content = await readOptional("dist/content/content-pipeline-report.json");
 const promotion = await readOptional("dist/content/content-promotion-plan.json");
+const deployCheck = await readOptional("dist/party/party-deploy-check.json");
 
-const checks = makeChecks({ content, promotion });
+const checks = makeChecks({ content, promotion, deployCheck });
 const blockers = checks.filter((check) => check.status === "blocked");
 const warnings = checks.filter((check) => check.status === "warning");
 const output = {
@@ -36,6 +37,7 @@ const output = {
     hostServer: "npm run serve:party",
     contentReview: "npm run content:review",
     multiplayerSmoke: "npm run smoke:multiplayer",
+    deployCheck: "npm run party:deploy-check",
     partyServerSmoke: "npm run party:server-smoke"
   }
 };
@@ -132,6 +134,14 @@ function makeChecks(data) {
     area: "Party Server",
     status: "ready",
     detail: "npm run party:readiness runs the live /host plus /join Socket.IO smoke before writing this report."
+  });
+
+  checks.push({
+    area: "Railway Deploy",
+    status: data.deployCheck?.ready ? "ready" : "warning",
+    detail: data.deployCheck?.ready
+      ? "Railway deploy config and party server entrypoints pass local deployment checks."
+      : "Run npm run party:deploy-check before using Railway for the public join URL."
   });
 
   return checks;

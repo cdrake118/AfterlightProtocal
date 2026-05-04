@@ -94,6 +94,19 @@ The test is internet-free by design, but it is no longer transport-free. Steam N
 Run:
 
 ```sh
+npm run party:deploy-check
+```
+
+This verifies the Railway-facing deployment contract before a party test:
+
+- `railway.json` uses `npm start` and `/healthz`.
+- `package.json` keeps `start` and `serve:party` pointed at `server.js`.
+- `server.js` reads `PORT`, binds `0.0.0.0`, and exposes `/healthz`, `/host`, and `/join`.
+- Required Socket.IO and QR dependencies are present.
+
+Run:
+
+```sh
 npm run party:server-smoke
 ```
 

@@ -8,12 +8,12 @@ Run:
 npm run party:readiness
 ```
 
-This runs the content review, multiplayer contract smoke, live party server smoke, and writes:
+This runs the content review, multiplayer contract smoke, Railway deploy check, live party server smoke, and writes:
 
 - `dist/party/party-build-readiness.json`
 - `dist/party/party-build-readiness.md`
 
-Use this report before inviting testers. It focuses on the couch-party path rather than the later Steam/private-beta path: runtime atlases, Manor map art, Tiled health, production audio, content promotion status, phone-controller networking contract health, and the actual `/host` plus `/join` Socket.IO relay.
+Use this report before inviting testers. It focuses on the couch-party path rather than the later Steam/private-beta path: runtime atlases, Manor map art, Tiled health, production audio, content promotion status, Railway deploy config, phone-controller networking contract health, and the actual `/host` plus `/join` Socket.IO relay.
 
 ## Party Setup
 
@@ -21,4 +21,5 @@ Use this report before inviting testers. It focuses on the couch-party path rath
 - Open `/host` on the laptop.
 - Show the laptop on the TV with HDMI first; AirPlay is the fallback.
 - Phones join with the QR code or room URL.
+- Run `npm run party:deploy-check` before pushing a Railway-hosted room URL to guests.
 - Run `npm run party:server-smoke` before guests arrive to verify the host page, phone controller page, diagnostics routes, room creation, and phone input relay.
