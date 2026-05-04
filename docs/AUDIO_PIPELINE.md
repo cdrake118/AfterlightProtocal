@@ -52,6 +52,14 @@ npm run audio:brief
 
 This writes `dist/assets/audio-brief.json` and `.md` from `assets/audio/audio-manifest.json` plus `assets/audio/audio-briefs.json`. Use it as the handoff sheet for music and SFX production: each slot lists the target file path, intent, duration, loop behavior, legally-clean prompt, and delivery checklist.
 
+Run:
+
+```sh
+npm run audio:production-pack
+```
+
+This writes `dist/assets/audio-production-pack/` with a production index and couch-party cue sheet. Use it when commissioning, generating, or reviewing final files: it groups every music/SFX slot by target path, mix priority, audition order, speaker checks, and acceptance criteria for laptop, TV, and phone playback.
+
 For a full audio readiness pass, run:
 
 ```sh

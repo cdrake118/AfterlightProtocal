@@ -19,6 +19,7 @@ const reports = {
   mapArt: await readOptional("dist/maps/map-art-audit.json"),
   mapArtHandoff: await readOptional("dist/maps/map-art-handoff/index.json"),
   audioBriefs: await readOptional("dist/assets/audio-brief.json"),
+  audioProductionPack: await readOptional("dist/assets/audio-production-pack/index.json"),
   audio: await readOptional("dist/assets/audio-asset-audit.json")
 };
 
@@ -40,6 +41,7 @@ const output = {
     readyMapArt: reports.mapArt?.summary?.ready ?? 0,
     mapArtHandoffs: reports.mapArtHandoff?.summary?.total ?? 0,
     audioBriefs: reports.audioBriefs?.summary?.totalSlots ?? 0,
+    audioProductionPackSlots: reports.audioProductionPack?.summary?.totalSlots ?? 0,
     audioReady: reports.audio?.summary?.ready ?? 0,
     audioTotal: reports.audio?.summary?.totalSlots ?? 0,
     incomingCandidates: reports.contentIntake?.summary?.candidates ?? 0,
@@ -99,8 +101,11 @@ function makeRisks(data) {
 
   const audio = data.audio?.summary;
   const audioBriefs = data.audioBriefs?.summary;
+  const audioProductionPack = data.audioProductionPack?.summary;
   if (!audioBriefs) risks.push("Run npm run audio:brief to generate audio production handoff data.");
   else if (audioBriefs.missingBriefs > 0) risks.push(`${audioBriefs.missingBriefs} audio slots are missing production briefs.`);
+
+  if (!audioProductionPack) risks.push("Run npm run audio:production-pack to generate the couch-party audio cue sheet.");
 
   if (!audio) risks.push("Run npm run audio:audit to generate audio audit data.");
   else if (audio.missing > 0) risks.push(`${audio.missing} audio slots are still missing files.`);
@@ -170,7 +175,7 @@ function makeNextActions(data) {
       action: "Fill the required music/SFX files from the audio production brief.",
       command: "npm run audio:review",
       doneWhen: "audio audit reports 14/14 runtime files ready.",
-      source: "dist/assets/audio-brief.md"
+      source: "dist/assets/audio-production-pack/index.md"
     });
   }
 
@@ -234,6 +239,7 @@ function makeMarkdown(data) {
 | Ready map art | ${data.summary.readyMapArt} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
 | Map art handoffs | ${data.summary.mapArtHandoffs} | ${data.summary.readyMapArt + data.summary.plannedMapArt} |
 | Audio production briefs | ${data.summary.audioBriefs} | ${data.summary.audioTotal || data.summary.audioBriefs} |
+| Audio production pack | ${data.summary.audioProductionPackSlots} | ${data.summary.audioTotal || data.summary.audioBriefs} |
 | Audio files | ${data.summary.audioReady} | ${data.summary.audioTotal} |
 | Incoming candidates | ${data.summary.incomingCandidates} | ${data.summary.incomingCandidates + data.summary.incomingNeedsCleanup} |
 
