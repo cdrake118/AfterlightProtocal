@@ -53,6 +53,14 @@ This writes a candidate atlas manifest and review note into `dist/assets/atlas-c
 Run:
 
 ```sh
+npm run assets:atlas-install -- incoming/characters/investigator-clean.png --atlas dist/assets/atlas-candidates/investigator-production-atlas.atlas.json --brief investigator-production-atlas --dry-run
+```
+
+This validates a cleaned PNG plus atlas JSON, then reports the exact promotion changes needed. Remove `--dry-run` to copy the PNG into `assets/characters/`, write the normalized runtime atlas JSON, and add the atlas to `runtime-character-manifest.json`. After installing, run `npm run assets:review` and inspect the atlas preview before testing in-game.
+
+Run:
+
+```sh
 npm run assets:audit
 ```
 
