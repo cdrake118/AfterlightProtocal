@@ -7,6 +7,24 @@
   color: #edf7f7;
   touch-action: none;
   user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+
+.controller-body button,
+.controller-body canvas,
+.joystick,
+.joystick span,
+.touch-zone,
+.action-pad {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.controller-body button {
+  touch-action: manipulation;
 }
 
 .controller-shell {

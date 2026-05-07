@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
     <title>Afterlight Controller</title>
     <link rel="stylesheet" href="styles.css?v=20260503-01">
-    <link rel="stylesheet" href="controller.css?v=20260503-01">
+    <link rel="stylesheet" href="controller.css?v=20260507-02">
   </head>
   <body class="controller-body">
     <main class="controller-shell">
@@ -45,7 +45,7 @@
           </div>
           <button id="readyBtn" type="button">Ready</button>
         </header>
-        <canvas id="miniMap" width="360" height="210" hidden aria-label="Anomaly private map"></canvas>
+        <canvas id="miniMap" width="360" height="210" hidden aria-label="Phone minimap"></canvas>
         <div class="touch-zone">
           <div class="joystick" id="joystick" aria-label="Move joystick">
             <span id="joystickKnob"></span>
@@ -60,6 +60,6 @@
       </section>
     </main>
     <script src="/socket.io/socket.io.js"></script>
-    <script type="module" src="src/controller.js?v=20260503-01"></script>
+    <script type="module" src="src/controller.js?v=20260507-02"></script>
   </body>
 </html>

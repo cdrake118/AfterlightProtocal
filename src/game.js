@@ -188,7 +188,7 @@ const GameBalance = {
   },
   tracker: {
     moveSpeed: 117,
-    flashlightBatteryMax: 125,
+    flashlightBatteryMax: 144,
     flashlightDrainPerSecond: 19.2,
     aiFlashlightDrainPerSecond: 15.6,
     flashlightBeamLength: 285,
@@ -207,7 +207,7 @@ const GameBalance = {
   },
   batteries: {
     spawnIntervalSeconds: 30,
-    lowBatteryThreshold: 0.28,
+    lowBatteryThreshold: 0.35,
     startingPickups: 1,
     maxActivePickups: 3,
     overchargeDurationSeconds: 18,
@@ -1291,7 +1291,7 @@ function assignInvestigatorIntent(agent) {
   }
 
   const overchargeBattery = nearestBattery(agent, 540, (pickup) => pickup.kind === "overcharge");
-  const battery = overchargeBattery ?? (agent.battery < maxBatteryCapacity * 0.28 ? nearestBattery(agent, 540) : null);
+  const battery = overchargeBattery ?? (agent.battery < maxBatteryCapacity * lowBatterySpawnThreshold ? nearestBattery(agent, 540) : null);
   if (battery) {
     agent.intent = "battery";
     agent.intentTarget = battery;

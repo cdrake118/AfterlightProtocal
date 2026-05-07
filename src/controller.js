@@ -43,6 +43,11 @@ if (!socket) {
   setJoinStatus("Controller server unavailable. Open this through the party server.");
 }
 
+document.querySelectorAll("button, .joystick, .action-pad").forEach((element) => {
+  element.addEventListener("selectstart", (event) => event.preventDefault());
+  element.addEventListener("dragstart", (event) => event.preventDefault());
+});
+
 investigatorRoleBtn.addEventListener("click", () => setRole("Investigator", true));
 anomalyRoleBtn.addEventListener("click", () => setRole("Anomaly", true));
 
@@ -138,9 +143,9 @@ socket?.on("match:start", () => {
 });
 
 socket?.on("host:state", (state) => {
-  if (member?.role === "Anomaly") {
+  if (member?.role) {
     miniMap.hidden = false;
-    drawMiniMap(state);
+    drawMiniMap(state, member.role);
   } else {
     miniMap.hidden = true;
   }
@@ -217,7 +222,7 @@ function releaseLight() {
   lightBtn.classList.remove("active");
 }
 
-function drawMiniMap(state) {
+function drawMiniMap(state, role) {
   const w = miniMap.width;
   const h = miniMap.height;
   miniMapCtx.clearRect(0, 0, w, h);
@@ -229,7 +234,16 @@ function drawMiniMap(state) {
   const sx = (x) => 8 + (x / 1280) * (w - 16);
   const sy = (y) => 8 + (y / 720) * (h - 16);
   for (const wall of state?.walls ?? []) {
+    miniMapCtx.strokeStyle = wall.visible === false ? "rgba(244, 179, 93, 0.72)" : "rgba(174, 191, 199, 0.44)";
     miniMapCtx.fillStyle = "rgba(174, 191, 199, 0.22)";
+    if (wall.shape === "segment") {
+      miniMapCtx.lineWidth = Math.max(1.5, ((wall.thickness ?? 1) / 1280) * (w - 16));
+      miniMapCtx.beginPath();
+      miniMapCtx.moveTo(sx(wall.x), sy(wall.y));
+      miniMapCtx.lineTo(sx(wall.x2), sy(wall.y2));
+      miniMapCtx.stroke();
+      continue;
+    }
     miniMapCtx.fillRect(sx(wall.x), sy(wall.y), (wall.w / 1280) * (w - 16), (wall.h / 720) * (h - 16));
   }
   for (const agent of state?.investigators ?? []) {
@@ -238,7 +252,7 @@ function drawMiniMap(state) {
     miniMapCtx.arc(sx(agent.x), sy(agent.y), 4, 0, Math.PI * 2);
     miniMapCtx.fill();
   }
-  if (state?.anomaly) {
+  if (role === "Anomaly" && state?.anomaly) {
     miniMapCtx.fillStyle = "#e76f8a";
     miniMapCtx.beginPath();
     miniMapCtx.arc(sx(state.anomaly.x), sy(state.anomaly.y), 6, 0, Math.PI * 2);
