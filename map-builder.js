@@ -15,7 +15,6 @@ const defaultBarrierThickness = 1;
 const wallAnchorHitRadius = 18;
 const storageFloorImageMax = { width: 1280, height: 720, quality: 0.86 };
 const storageDecorationImageMax = { width: 640, height: 640, quality: 0.86 };
-const draftKey = "afterlight-map-builder-draft";
 const savedMapsKey = "afterlight-map-builder-saves";
 const assetTrayKey = "afterlight-map-builder-assets";
 const playtestMapKey = "afterlight-playtest-map";
@@ -177,28 +176,6 @@ function wireControls() {
     commitHistory("Sample");
     renderSavedMaps("");
     markStatus("Sample loaded");
-  });
-  document.querySelector("#saveDraftBtn").addEventListener("click", async () => {
-    try {
-      localStorage.setItem(draftKey, JSON.stringify(await compactMapForStorage(toGameMap()), null, 2));
-      markStatus("Draft saved");
-    } catch (error) {
-      markStatus(`Draft failed: ${friendlyStorageError(error)}`);
-    }
-  });
-  document.querySelector("#loadDraftBtn").addEventListener("click", () => {
-    const draft = localStorage.getItem(draftKey);
-    if (!draft) {
-      markStatus("No draft found");
-      return;
-    }
-    map = normalizeGameMap(JSON.parse(draft));
-    activeSaveSlot = "";
-    clearSelection();
-    syncForm();
-    commitHistory("Quick Load");
-    renderSavedMaps("");
-    markStatus("Draft loaded");
   });
   document.querySelector("#importBtn").addEventListener("click", () => importFile.click());
   importFile.addEventListener("change", importJsonFile);
