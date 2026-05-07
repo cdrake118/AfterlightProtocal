@@ -344,7 +344,7 @@ async function importBackgroundImage() {
   const [file] = backgroundFile.files;
   if (!file) return;
   try {
-    const asset = await readImageAsset(file);
+    const asset = await readImageAsset(file, "backgrounds");
     map.backgroundImage = {
       ...asset,
       x: 0,
@@ -369,7 +369,7 @@ async function importForegroundImage() {
   const [file] = foregroundFile.files;
   if (!file) return;
   try {
-    const asset = await readImageAsset(file);
+    const asset = await readImageAsset(file, "foregrounds");
     map.foregroundImage = {
       ...asset,
       x: 0,
@@ -394,7 +394,7 @@ async function importDecorationImage() {
   const [file] = decorationFile.files;
   if (!file) return;
   try {
-    pendingDecoration = await readImageAsset(file);
+    pendingDecoration = await readImageAsset(file, "props");
     preloadImage(pendingDecoration.src);
     assetTray = [pendingDecoration, ...assetTray.filter((asset) => asset.src !== pendingDecoration.src)].slice(0, 18);
     saveAssetTray();
@@ -544,7 +544,7 @@ function clearMusic() {
   markStatus("Map music cleared");
 }
 
-function readImageAsset(file) {
+function readImageAsset(file, kind = "misc") {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith("image/")) {
       reject(new Error("Choose an image file"));
@@ -554,15 +554,21 @@ function readImageAsset(file) {
     reader.addEventListener("load", () => {
       const src = String(reader.result);
       const image = new Image();
-      image.addEventListener("load", () => {
-        resolve({
-          name: file.name.replace(/\.[^.]+$/, ""),
-          src,
-          naturalWidth: image.naturalWidth || 192,
-      naturalHeight: image.naturalHeight || 192,
-      mimeType: file.type,
-      rotation: 0
-        });
+      image.addEventListener("load", async () => {
+        try {
+          const uploaded = await uploadImageAsset(file, kind, src);
+          resolve({
+            name: uploaded.name || file.name.replace(/\.[^.]+$/, ""),
+            src: uploaded.src,
+            naturalWidth: image.naturalWidth || 192,
+            naturalHeight: image.naturalHeight || 192,
+            mimeType: uploaded.mimeType || file.type,
+            size: uploaded.size ?? file.size,
+            rotation: 0
+          });
+        } catch (error) {
+          reject(error);
+        }
       }, { once: true });
       image.addEventListener("error", () => reject(new Error("Image could not be read")), { once: true });
       image.src = src;
@@ -570,6 +576,25 @@ function readImageAsset(file) {
     reader.addEventListener("error", () => reject(new Error("Image could not be read")), { once: true });
     reader.readAsDataURL(file);
   });
+}
+
+function uploadImageAsset(file, kind, dataUrl) {
+  return fetch("/api/map-images", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: file.name,
+      kind,
+      mimeType: file.type || "image/png",
+      size: file.size,
+      dataUrl
+    })
+  })
+    .then(async (response) => {
+      const payload = await response.json();
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || "Image could not be uploaded");
+      return payload.image;
+    });
 }
 
 function uploadAudioAsset(file) {

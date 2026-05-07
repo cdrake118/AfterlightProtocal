@@ -1,5 +1,5 @@
 import { createReadStream, existsSync } from "node:fs";
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { basename, extname, join, normalize, resolve, sep } from "node:path";
@@ -10,9 +10,14 @@ import QRCode from "qrcode";
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT ?? 5173);
 const roomTtlMs = 1000 * 60 * 60 * 6;
-const mapMusicDir = resolve(process.env.MAP_MUSIC_DIR ?? (existsSync("/data") ? "/data/map-music" : join(root, "assets", "audio", "maps")));
+const storageRoot = resolve(process.env.AFTERLIGHT_STORAGE_DIR ?? (existsSync("/data") ? "/data/afterlight" : join(root, ".afterlight-data")));
+const storageDirs = makeStorageDirs(storageRoot);
+const mapMusicDir = resolve(process.env.MAP_MUSIC_DIR ?? storageDirs.music);
 const maxMapMusicUploadBytes = 12 * 1024 * 1024;
 const maxMapMusicRequestBytes = Math.ceil(maxMapMusicUploadBytes * 1.4) + 2048;
+const maxMapImageUploadBytes = 10 * 1024 * 1024;
+const maxMapImageRequestBytes = Math.ceil(maxMapImageUploadBytes * 1.4) + 2048;
+const maxMapDataBytes = 2 * 1024 * 1024;
 const rooms = new Map();
 
 const mimeTypes = {
@@ -29,6 +34,12 @@ const mimeTypes = {
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav"
 };
+
+await ensureStorage();
+await appendStorageLog("storage:ready", {
+  root: storageRoot,
+  volume: existsSync("/data")
+});
 
 const server = createServer(async (req, res) => {
   try {
@@ -50,6 +61,26 @@ const server = createServer(async (req, res) => {
       sendHtml(res, renderDiagnosticsPage([...rooms.values()]));
       return;
     }
+    if (requestUrl.pathname === "/api/storage" && req.method === "GET") {
+      sendJson(res, await storageStatus());
+      return;
+    }
+    if (requestUrl.pathname === "/api/maps" && req.method === "GET") {
+      sendJson(res, await listStoredMaps());
+      return;
+    }
+    if (requestUrl.pathname === "/api/maps" && req.method === "POST") {
+      sendJson(res, await saveStoredMap(req), 201);
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/api/maps/") && req.method === "GET") {
+      sendJson(res, await readStoredMap(requestUrl.pathname));
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/api/maps/") && req.method === "DELETE") {
+      sendJson(res, await deleteStoredMap(requestUrl.pathname));
+      return;
+    }
     if (requestUrl.pathname === "/api/map-music" && req.method === "GET") {
       sendJson(res, await listMapMusic());
       return;
@@ -62,8 +93,24 @@ const server = createServer(async (req, res) => {
       sendJson(res, await deleteMapMusic(requestUrl.pathname));
       return;
     }
+    if (requestUrl.pathname === "/api/map-images" && req.method === "GET") {
+      sendJson(res, await listMapImages(requestUrl.searchParams.get("kind")));
+      return;
+    }
+    if (requestUrl.pathname === "/api/map-images" && req.method === "POST") {
+      sendJson(res, await saveMapImage(req), 201);
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/api/map-images/") && req.method === "DELETE") {
+      sendJson(res, await deleteMapImage(requestUrl.pathname));
+      return;
+    }
     if (requestUrl.pathname.startsWith("/assets/audio/maps/") && (req.method === "GET" || req.method === "HEAD")) {
       await sendMapMusicAsset(requestUrl.pathname, res);
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/storage/images/") && (req.method === "GET" || req.method === "HEAD")) {
+      await sendMapImageAsset(requestUrl.pathname, res);
       return;
     }
     if (requestUrl.pathname === "/host") {
@@ -241,6 +288,7 @@ io.on("connection", (socket) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`Afterlight party server listening on http://127.0.0.1:${port}`);
+  appendStorageLog("server:start", { port }).catch(() => {});
 });
 
 async function sendStatic(pathname, res) {
@@ -296,6 +344,90 @@ function getOrigin(req) {
   return `${proto}://${host}`;
 }
 
+function makeStorageDirs(base) {
+  return {
+    root: base,
+    maps: join(base, "maps"),
+    mapDrafts: join(base, "maps", "drafts"),
+    mapPublished: join(base, "maps", "published"),
+    media: join(base, "media"),
+    images: join(base, "media", "images"),
+    imageBackgrounds: join(base, "media", "images", "backgrounds"),
+    imageForegrounds: join(base, "media", "images", "foregrounds"),
+    imageProps: join(base, "media", "images", "props"),
+    imageMisc: join(base, "media", "images", "misc"),
+    music: join(base, "media", "music"),
+    uploads: join(base, "uploads"),
+    logs: join(base, "logs"),
+    tmp: join(base, "tmp")
+  };
+}
+
+async function ensureStorage() {
+  await Promise.all(Object.values(storageDirs).map((dir) => mkdir(dir, { recursive: true })));
+  await migrateLegacyMusic();
+}
+
+async function migrateLegacyMusic() {
+  const legacyDir = join("/data", "map-music");
+  if (!existsSync(legacyDir) || resolve(legacyDir) === resolve(mapMusicDir)) return;
+  const entries = await readdir(legacyDir, { withFileTypes: true });
+  await mkdir(mapMusicDir, { recursive: true });
+  await Promise.all(entries
+    .filter((entry) => entry.isFile() && [".mp3", ".ogg", ".wav"].includes(extname(entry.name).toLowerCase()))
+    .map(async (entry) => {
+      const target = join(mapMusicDir, sanitizeAudioFilename(entry.name));
+      if (existsSync(target)) return;
+      await copyFile(join(legacyDir, entry.name), target);
+    }));
+}
+
+async function storageStatus() {
+  await ensureStorage();
+  return {
+    ok: true,
+    root: storageRoot,
+    volume: existsSync("/data"),
+    structure: {
+      maps: {
+        drafts: relativeStoragePath(storageDirs.mapDrafts),
+        published: relativeStoragePath(storageDirs.mapPublished)
+      },
+      media: {
+        images: {
+          backgrounds: relativeStoragePath(storageDirs.imageBackgrounds),
+          foregrounds: relativeStoragePath(storageDirs.imageForegrounds),
+          props: relativeStoragePath(storageDirs.imageProps),
+          misc: relativeStoragePath(storageDirs.imageMisc)
+        },
+        music: relativeStoragePath(mapMusicDir)
+      },
+      uploads: relativeStoragePath(storageDirs.uploads),
+      logs: relativeStoragePath(storageDirs.logs),
+      tmp: relativeStoragePath(storageDirs.tmp)
+    },
+    counts: {
+      maps: await countFiles(storageDirs.mapPublished),
+      images: await countFiles(storageDirs.images),
+      music: await countFiles(mapMusicDir),
+      logs: await countFiles(storageDirs.logs)
+    }
+  };
+}
+
+async function countFiles(dir) {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true, recursive: true });
+    return entries.filter((entry) => entry.isFile()).length;
+  } catch {
+    return 0;
+  }
+}
+
+function relativeStoragePath(dir) {
+  return dir === storageRoot ? "." : dir.replace(`${storageRoot}${sep}`, "");
+}
+
 async function listMapMusic() {
   await mkdir(mapMusicDir, { recursive: true });
   const entries = await readdir(mapMusicDir, { withFileTypes: true });
@@ -323,6 +455,7 @@ async function saveMapMusic(req) {
   const filePath = join(mapMusicDir, filename);
   await writeFile(filePath, bytes);
   const info = await stat(filePath);
+  await appendStorageLog("music:upload", { filename, size: info.size });
   return { ok: true, music: mapMusicItem(filename, info.size, info.mtimeMs) };
 }
 
@@ -336,6 +469,7 @@ async function deleteMapMusic(pathname) {
     if (error.code === "ENOENT") throw httpError(404, "Music file not found.");
     throw error;
   }
+  await appendStorageLog("music:delete", { filename });
   return { ok: true, deleted: filename };
 }
 
@@ -396,6 +530,143 @@ function mapMusicItem(filename, size, mtimeMs) {
   };
 }
 
+async function listMapImages(kind) {
+  const kinds = kind ? [sanitizeImageKind(kind)] : imageKinds();
+  const images = [];
+  for (const itemKind of kinds) {
+    const dir = imageKindDir(itemKind);
+    await mkdir(dir, { recursive: true });
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !isImageExtension(entry.name)) continue;
+      const info = await stat(join(dir, entry.name));
+      images.push(mapImageItem(itemKind, entry.name, info.size, info.mtimeMs));
+    }
+  }
+  return { ok: true, images: images.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+async function saveMapImage(req) {
+  const payload = await readJsonBody(req, maxMapImageRequestBytes);
+  const kind = sanitizeImageKind(payload.kind ?? "misc");
+  const { mimeType, bytes, extension } = dataUrlToBytes(payload.dataUrl, imageMimeTypes());
+  if (bytes.length > maxMapImageUploadBytes) throw httpError(413, "Image upload is larger than 10 MB.");
+  const dir = imageKindDir(kind);
+  await mkdir(dir, { recursive: true });
+  const filename = await uniqueStoredFilename(dir, `${slugifyStorageName(payload.name || "map-image")}${extension}`);
+  const filePath = join(dir, filename);
+  await writeFile(filePath, bytes);
+  const info = await stat(filePath);
+  await appendStorageLog("image:upload", { kind, filename, size: info.size });
+  return { ok: true, image: mapImageItem(kind, filename, info.size, info.mtimeMs, mimeType) };
+}
+
+async function deleteMapImage(pathname) {
+  const [, kind, rawFilename] = /^\/api\/map-images\/([^/]+)\/([^/]+)$/.exec(pathname) ?? [];
+  const imageKind = sanitizeImageKind(kind);
+  const filename = sanitizeImageFilename(decodeURIComponent(rawFilename ?? ""));
+  if (!filename) throw httpError(400, "Choose a valid image file.");
+  const filePath = resolveStoredFile(imageKindDir(imageKind), filename);
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") throw httpError(404, "Image file not found.");
+    throw error;
+  }
+  await appendStorageLog("image:delete", { kind: imageKind, filename });
+  return { ok: true, deleted: filename };
+}
+
+async function sendMapImageAsset(pathname, res) {
+  const [, kind, rawFilename] = /^\/storage\/images\/([^/]+)\/([^/]+)$/.exec(pathname) ?? [];
+  const imageKind = sanitizeImageKind(kind);
+  const filename = sanitizeImageFilename(decodeURIComponent(rawFilename ?? ""));
+  if (!filename) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+  const filePath = resolveStoredFile(imageKindDir(imageKind), filename);
+  if (!existsSync(filePath)) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+  await sendFile(res, filePath);
+}
+
+function mapImageItem(kind, filename, size, mtimeMs, mimeType = null) {
+  return {
+    kind,
+    name: filename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+    filename,
+    src: `/storage/images/${kind}/${filename}`,
+    mimeType: mimeType ?? mimeTypes[extname(filename).toLowerCase()] ?? "image/png",
+    size,
+    updatedAt: new Date(mtimeMs).toISOString()
+  };
+}
+
+async function listStoredMaps() {
+  await mkdir(storageDirs.mapPublished, { recursive: true });
+  const entries = await readdir(storageDirs.mapPublished, { withFileTypes: true });
+  const maps = await Promise.all(entries
+    .filter((entry) => entry.isFile() && extname(entry.name).toLowerCase() === ".json")
+    .map(async (entry) => {
+      const info = await stat(join(storageDirs.mapPublished, entry.name));
+      return storedMapItem(entry.name, info.size, info.mtimeMs);
+    }));
+  return { ok: true, maps: maps.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+async function saveStoredMap(req) {
+  const payload = await readJsonBody(req, maxMapDataBytes);
+  const map = payload.map ?? payload;
+  if (!map || typeof map !== "object" || Array.isArray(map)) throw httpError(400, "Map payload must be an object.");
+  const name = sanitizeText(map.name ?? payload.name, "Untitled Map", 64);
+  await mkdir(storageDirs.mapPublished, { recursive: true });
+  const filename = await uniqueStoredFilename(storageDirs.mapPublished, `${slugifyStorageName(name)}.json`);
+  const filePath = join(storageDirs.mapPublished, filename);
+  await writeFile(filePath, `${JSON.stringify(map, null, 2)}\n`);
+  const info = await stat(filePath);
+  await appendStorageLog("map:save", { filename, size: info.size });
+  return { ok: true, map: storedMapItem(filename, info.size, info.mtimeMs) };
+}
+
+async function readStoredMap(pathname) {
+  const filename = sanitizeJsonFilename(decodeURIComponent(pathname.replace(/^\/api\/maps\//, "")));
+  if (!filename) throw httpError(400, "Choose a valid map file.");
+  const filePath = resolveStoredFile(storageDirs.mapPublished, filename);
+  try {
+    return { ok: true, map: JSON.parse(await readFile(filePath, "utf8")) };
+  } catch (error) {
+    if (error.code === "ENOENT") throw httpError(404, "Map file not found.");
+    throw error;
+  }
+}
+
+async function deleteStoredMap(pathname) {
+  const filename = sanitizeJsonFilename(decodeURIComponent(pathname.replace(/^\/api\/maps\//, "")));
+  if (!filename) throw httpError(400, "Choose a valid map file.");
+  const filePath = resolveStoredFile(storageDirs.mapPublished, filename);
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") throw httpError(404, "Map file not found.");
+    throw error;
+  }
+  await appendStorageLog("map:delete", { filename });
+  return { ok: true, deleted: filename };
+}
+
+function storedMapItem(filename, size, mtimeMs) {
+  return {
+    name: filename.replace(/\.json$/i, "").replace(/[-_]+/g, " "),
+    filename,
+    src: `/api/maps/${filename}`,
+    size,
+    updatedAt: new Date(mtimeMs).toISOString()
+  };
+}
+
 function sanitizeAudioFilename(value) {
   const name = basename(String(value ?? ""));
   const ext = extname(name).toLowerCase();
@@ -404,8 +675,98 @@ function sanitizeAudioFilename(value) {
   return `${stem}${ext}`;
 }
 
+function sanitizeImageFilename(value) {
+  const name = basename(String(value ?? ""));
+  const ext = extname(name).toLowerCase();
+  if (!Object.values(imageMimeTypes()).includes(ext)) return "";
+  return `${slugifyStorageName(name.slice(0, -ext.length))}${ext}`;
+}
+
+function sanitizeJsonFilename(value) {
+  const name = basename(String(value ?? ""));
+  const ext = extname(name).toLowerCase();
+  if (ext !== ".json") return "";
+  return `${slugifyStorageName(name.slice(0, -ext.length))}.json`;
+}
+
 function slugifyAudioName(value) {
   return String(value).toLowerCase().replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "map-music";
+}
+
+function slugifyStorageName(value) {
+  return String(value).toLowerCase().replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "asset";
+}
+
+async function uniqueStoredFilename(dir, preferred) {
+  const ext = extname(preferred).toLowerCase();
+  const base = slugifyStorageName(preferred.slice(0, -ext.length));
+  for (let index = 0; index < 1000; index += 1) {
+    const candidate = index ? `${base}-${index + 1}${ext}` : `${base}${ext}`;
+    if (!existsSync(join(dir, candidate))) return candidate;
+  }
+  return `${base}-${Date.now()}${ext}`;
+}
+
+function dataUrlToBytes(dataUrl, allowedMimeTypes) {
+  const match = /^data:([^;,]+);base64,([a-z0-9+/=\s]+)$/i.exec(String(dataUrl ?? ""));
+  if (!match) throw httpError(400, "Upload must be a base64 data URL.");
+  const mimeType = match[1].toLowerCase();
+  const extension = allowedMimeTypes[mimeType];
+  if (!extension) throw httpError(400, "Unsupported file type.");
+  const bytes = Buffer.from(match[2].replace(/\s/g, ""), "base64");
+  if (!bytes.length) throw httpError(400, "Upload was empty.");
+  return { mimeType, bytes, extension };
+}
+
+function imageMimeTypes() {
+  return {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg"
+  };
+}
+
+function imageKinds() {
+  return ["backgrounds", "foregrounds", "props", "misc"];
+}
+
+function sanitizeImageKind(value) {
+  const aliases = {
+    background: "backgrounds",
+    foreground: "foregrounds",
+    prop: "props",
+    decoration: "props"
+  };
+  const kind = aliases[String(value ?? "").toLowerCase()] ?? String(value ?? "").toLowerCase();
+  if (imageKinds().includes(kind)) return kind;
+  throw httpError(400, "Choose a valid image kind.");
+}
+
+function imageKindDir(kind) {
+  return {
+    backgrounds: storageDirs.imageBackgrounds,
+    foregrounds: storageDirs.imageForegrounds,
+    props: storageDirs.imageProps,
+    misc: storageDirs.imageMisc
+  }[kind];
+}
+
+function isImageExtension(filename) {
+  return Object.values(imageMimeTypes()).includes(extname(filename).toLowerCase());
+}
+
+function resolveStoredFile(dir, filename) {
+  const libraryRoot = resolve(dir);
+  const filePath = resolve(libraryRoot, filename);
+  if (filePath !== libraryRoot && filePath.startsWith(`${libraryRoot}${sep}`)) return filePath;
+  throw httpError(403, "File is outside storage.");
+}
+
+async function appendStorageLog(event, detail = {}) {
+  await mkdir(storageDirs.logs, { recursive: true });
+  const line = `${JSON.stringify({ event, detail, at: new Date().toISOString() })}\n`;
+  await appendFile(join(storageDirs.logs, "server-events.jsonl"), line);
 }
 
 function httpError(status, message) {
