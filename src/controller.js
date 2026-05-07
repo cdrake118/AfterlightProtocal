@@ -143,7 +143,7 @@ socket?.on("match:start", () => {
 });
 
 socket?.on("host:state", (state) => {
-  if (member?.role) {
+  if (member?.role === "Anomaly") {
     miniMap.hidden = false;
     drawMiniMap(state, member.role);
   } else {
