@@ -131,7 +131,12 @@ let audioManifest = null;
 let audioManifestPromise = null;
 let audioUnlockPending = false;
 const audioBuffers = new Map();
+const audioBufferPromises = new Map();
 const missingAudioAssets = new Set();
+let currentMusicSource = null;
+let currentMusicGain = null;
+let currentMusicTrackSrc = "";
+let requestedMusicTrackSrc = "";
 const audioVolumes = {
   master: 0.9,
   music: 0.72,
@@ -188,8 +193,8 @@ const GameBalance = {
     aiFlashlightDrainPerSecond: 15.6,
     flashlightBeamLength: 285,
     flashlightBeamAngleRadians: 0.34,
-    flashlightDamagePerSecond: 16,
-    aiFlashlightDamagePerSecond: 5.5,
+    flashlightDamagePerSecond: 18.4,
+    aiFlashlightDamagePerSecond: 6.325,
     reviveDurationSeconds: 2.2,
     reviveRange: 72,
     soloLives: 3,
@@ -243,6 +248,23 @@ const aiAnomalyMemoryMax = GameBalance.ghost.memorySecondsForBots;
 const aiProbeMinCooldown = GameBalance.ai.probeMinCooldownSeconds;
 const aiProbeMaxCooldown = GameBalance.ai.probeMaxCooldownSeconds;
 const characterSpriteSize = 128;
+const anomalyVisualScale = 0.85;
+const investigatorVisual = {
+  width: 48,
+  height: 78,
+  atlasWidth: 56,
+  atlasHeight: 88,
+  downWidth: 74,
+  downHeight: 48,
+  shadowWidth: 24,
+  shadowHeight: 6,
+  barOffset: 94,
+  nameplateOffset: 124,
+  reviveLabelOffset: 106,
+  flashlightForward: 18,
+  flashlightChestLift: 42,
+  flashlightSideOffset: 6
+};
 const characterSpriteCache = new Map();
 const investigatorAtlases = {};
 const anomalyAtlas = {
@@ -571,11 +593,27 @@ const maps = {
   }
 };
 
+const builderPlaytestMapName = "Builder Playtest";
+const builderPlaytestMapKey = "afterlight-playtest-map";
+maps[builderPlaytestMapName] = {
+  ...maps["Gloamhall Manor Compact"],
+  labels: maps["Gloamhall Manor Compact"].labels.map((label) => [...label]),
+  walls: maps["Gloamhall Manor Compact"].walls.map((wall) => ({ ...wall })),
+  props: maps["Gloamhall Manor Compact"].props.map((prop) => ({ ...prop })),
+  investigators: maps["Gloamhall Manor Compact"].investigators.map((spawn) => [...spawn]),
+  batteries: maps["Gloamhall Manor Compact"].batteries.map((spawn) => [...spawn])
+};
+
 let walls = [];
 let props = [];
+let mapDecorations = [];
+let mapBackgroundImage = null;
+let mapForegroundImage = null;
+let mapOccluders = [];
 let roomLabels = [];
 let floorColors = maps[currentMapName].floor;
 const floorPatterns = new Map();
+const mapImageCache = new Map();
 
 const state = {
   phase: "lobby",
@@ -651,7 +689,7 @@ function makeAgent(x, y, color, name) {
     spawnY: y,
     vx: 0,
     vy: 0,
-    radius: 15,
+    radius: 10,
     speed: investigatorMoveSpeed,
     dash: 0,
     dashCooldown: 0,
@@ -706,7 +744,7 @@ function makeAnomaly() {
     y: map.anomaly[1],
     vx: 0,
     vy: 0,
-    radius: 20,
+    radius: 10,
     speed: anomalyMoveSpeed,
     dash: 0,
     dashCooldown: 0,
@@ -725,6 +763,7 @@ function makeAnomaly() {
 }
 
 function resetMatch() {
+  stopMapMusic();
   loadMap(currentMapName);
   setMatchSeed(replaySeed ?? createMatchSeed());
   const map = maps[currentMapName] ?? maps["Observatory Annex"];
@@ -769,16 +808,61 @@ function resetMatch() {
 }
 
 function loadMap(name) {
+  installBuilderPlaytestMap();
   currentMapName = maps[name] ? name : "Observatory Annex";
   const map = maps[currentMapName];
   walls = map.walls.map((wall) => ({ ...wall }));
   props = map.props.map((prop) => ({ ...prop }));
+  mapDecorations = (map.decorations ?? []).map((decoration) => ({ ...decoration }));
+  mapBackgroundImage = map.backgroundImage ? { ...map.backgroundImage } : null;
+  mapForegroundImage = map.foregroundImage ? { ...map.foregroundImage } : null;
+  mapOccluders = (map.occluders ?? []).map((occluder) => ({ ...occluder }));
   roomLabels = map.labels.map((label) => [...label]);
   floorColors = [...map.floor];
 }
 
+function installBuilderPlaytestMap() {
+  let builderMap = null;
+  try {
+    builderMap = JSON.parse(localStorage.getItem(builderPlaytestMapKey) ?? "null");
+  } catch {
+    builderMap = null;
+  }
+  if (!builderMap || typeof builderMap !== "object") {
+    return;
+  }
+  const fallback = maps["Gloamhall Manor Compact"];
+  maps[builderPlaytestMapName] = {
+    ...fallback,
+    ...builderMap,
+    event: { ...fallback.event, ...(builderMap.event ?? {}) },
+    floor: Array.isArray(builderMap.floor) && builderMap.floor.length >= 3 ? [...builderMap.floor] : [...fallback.floor],
+    player: Array.isArray(builderMap.player) ? [...builderMap.player] : [...fallback.player],
+    anomaly: Array.isArray(builderMap.anomaly) ? [...builderMap.anomaly] : [...fallback.anomaly],
+    investigators: Array.isArray(builderMap.investigators) ? builderMap.investigators.map((spawn) => [...spawn]) : fallback.investigators.map((spawn) => [...spawn]),
+    batteries: Array.isArray(builderMap.batteries) ? builderMap.batteries.map((spawn) => [...spawn]) : fallback.batteries.map((spawn) => [...spawn]),
+    relays: Array.isArray(builderMap.relays) ? builderMap.relays.map((relay) => [...relay]) : [],
+    labels: Array.isArray(builderMap.labels) ? builderMap.labels.map((label) => [...label]) : fallback.labels.map((label) => [...label]),
+    walls: Array.isArray(builderMap.walls) ? builderMap.walls.map((wall) => ({ ...wall })) : fallback.walls.map((wall) => ({ ...wall })),
+    props: Array.isArray(builderMap.props) ? builderMap.props.map((prop) => ({ ...prop })) : fallback.props.map((prop) => ({ ...prop })),
+    decorations: Array.isArray(builderMap.decorations) ? builderMap.decorations.map((decoration) => ({ ...decoration })) : [],
+    backgroundImage: builderMap.backgroundImage ? { ...builderMap.backgroundImage } : null,
+    foregroundImage: builderMap.foregroundImage ? { ...builderMap.foregroundImage } : null,
+    occluders: Array.isArray(builderMap.occluders) ? builderMap.occluders.map((occluder) => ({ ...occluder })) : [],
+    music: builderMap.music ? { ...builderMap.music } : null
+  };
+}
+
 function makeBattery(x, y, active = true, kind = "standard") {
   return { x, y, radius: kind === "overcharge" ? 15 : 11, active, kind, pulse: active ? visualRandom() * 10 : 0 };
+}
+
+function clampWorldX(x, radius = 0) {
+  return clamp(x, radius, world.width - radius);
+}
+
+function clampWorldY(y, radius = 0) {
+  return clamp(y, radius, world.height - radius);
 }
 
 function makeRelay(x, y) {
@@ -821,6 +905,7 @@ function startMatch() {
 function beginMatch() {
   state.phase = "playing";
   countdown = 0;
+  startMapMusic();
   publishPresence("playing");
   publishMatchEvent("match_started", makeMatchSnapshot(), true);
   setStatus(playerRole === "Anomaly" ? "Anomaly link established" : "Investigator link established");
@@ -828,6 +913,7 @@ function beginMatch() {
 
 function endMatch(text) {
   state.phase = "ended";
+  stopMapMusic();
   state.stats.outcome = text;
   const summary = makeRoundSummary(text);
   lastRoundSummary = summary;
@@ -1264,9 +1350,10 @@ function shouldAiUseLight(agent, target = state.anomaly) {
   if (agent.battery <= 0 || agent.resolve <= 0) {
     return false;
   }
-  const dist = distance(agent, target);
+  const origin = getInvestigatorFlashlightOrigin(agent);
+  const dist = distance(origin, target);
   const range = getFlashlightBeamRange(agent);
-  if (dist > range || segmentBlocked(agent.x, agent.y, target.x, target.y)) {
+  if (dist > range || segmentBlocked(origin.x, origin.y, target.x, target.y)) {
     return false;
   }
   if (target !== state.anomaly) {
@@ -1309,8 +1396,8 @@ function updateAiAnomalyAwareness(agent, dt) {
     agent.probeTimer = randomRange(warning ? 0.5 : 0.28, warning ? 0.9 : 0.52);
     agent.probeCooldown = randomRange(aiProbeMinCooldown + 0.45, aiProbeMaxCooldown + 0.9);
     agent.searchTarget = warning ? {
-      x: clamp(agent.x + Math.cos(sweepAngle) * 170, 124, 1156),
-      y: clamp(agent.y + Math.sin(sweepAngle) * 170, 128, 592),
+      x: clampWorldX(agent.x + Math.cos(sweepAngle) * 170, agent.radius),
+      y: clampWorldY(agent.y + Math.sin(sweepAngle) * 170, agent.radius),
       kind: "search"
     } : pickAiSearchTarget(agent);
   }
@@ -1330,8 +1417,8 @@ function rememberAnomaly(agent, scatter) {
   const angle = randomAngle();
   const offset = randomRange(0, scatter);
   agent.lastKnownAnomaly = {
-    x: clamp(state.anomaly.x + Math.cos(angle) * offset, 124, 1156),
-    y: clamp(state.anomaly.y + Math.sin(angle) * offset, 128, 592),
+    x: clampWorldX(state.anomaly.x + Math.cos(angle) * offset, state.anomaly.radius),
+    y: clampWorldY(state.anomaly.y + Math.sin(angle) * offset, state.anomaly.radius),
     kind: "anomaly-memory"
   };
   agent.anomalyMemory = aiAnomalyMemoryMax;
@@ -1434,8 +1521,8 @@ function findNavPath(start, goal, clearance) {
 
 function buildNavNodes(clearance) {
   const nodes = [];
-  for (let y = 128; y <= 592; y += navCellSize) {
-    for (let x = 124; x <= 1156; x += navCellSize) {
+  for (let y = clearance; y <= world.height - clearance; y += navCellSize) {
+    for (let x = clearance; x <= world.width - clearance; x += navCellSize) {
       if (!pointBlockedForCircle(x, y, clearance)) {
         nodes.push({ x, y, key: `${x}:${y}` });
       }
@@ -1481,15 +1568,10 @@ function reconstructNavPath(cameFrom, nodeByKey, currentKey) {
 }
 
 function pointBlockedForCircle(x, y, radius) {
-  if (x < 116 + radius || x > 1164 - radius || y < 120 + radius || y > 600 - radius) {
+  if (x < radius || x > world.width - radius || y < radius || y > world.height - radius) {
     return true;
   }
-  return [...walls, ...props].some((rect) => (
-    x >= rect.x - radius
-    && x <= rect.x + rect.w + radius
-    && y >= rect.y - radius
-    && y <= rect.y + rect.h + radius
-  ));
+  return [...walls, ...props].some((obstacle) => pointNearObstacle(x, y, radius, obstacle));
 }
 
 function getAiSearchTarget(agent) {
@@ -1514,9 +1596,9 @@ function pickAiSearchTarget(agent) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const angle = randomAngle();
     const offset = randomRange(44, 160);
-    const x = clamp(base.x + Math.cos(angle) * offset, 124, 1156);
-    const y = clamp(base.y + Math.sin(angle) * offset, 128, 592);
-    const blocked = [...walls, ...props].some((rect) => pointInRect(x, y, rect));
+    const x = clampWorldX(base.x + Math.cos(angle) * offset, agent.radius);
+    const y = clampWorldY(base.y + Math.sin(angle) * offset, agent.radius);
+    const blocked = [...walls, ...props].some((rect) => pointInObstacle(x, y, rect));
     if (!blocked) {
       return { x, y, kind: "search" };
     }
@@ -1645,8 +1727,8 @@ function updateCarriedInvestigatorPosition() {
     return;
   }
   const offset = anomaly.radius + agent.radius * 0.5;
-  agent.x = clamp(anomaly.x - Math.cos(anomaly.aim) * offset, 124, 1156);
-  agent.y = clamp(anomaly.y - Math.sin(anomaly.aim) * offset, 128, 592);
+  agent.x = clampWorldX(anomaly.x - Math.cos(anomaly.aim) * offset, agent.radius);
+  agent.y = clampWorldY(anomaly.y - Math.sin(anomaly.aim) * offset, agent.radius);
   agent.aim = anomaly.aim;
   setInvestigatorLight(agent, false);
 }
@@ -2303,16 +2385,16 @@ function makeEcho(index) {
   for (let attempt = 0; attempt < 14; attempt += 1) {
     const drift = angle + index * ((Math.PI * 2) / 3) + randomRange(-0.6, 0.6);
     const range = randomRange(110, 320);
-    const x = clamp(state.anomaly.x + Math.cos(drift) * range, 130, 1150);
-    const y = clamp(state.anomaly.y + Math.sin(drift) * range, 134, 586);
-    const blocked = [...walls, ...props].some((rect) => pointInRect(x, y, rect));
+    const x = clampWorldX(state.anomaly.x + Math.cos(drift) * range, 18);
+    const y = clampWorldY(state.anomaly.y + Math.sin(drift) * range, 18);
+    const blocked = [...walls, ...props].some((obstacle) => pointInObstacle(x, y, obstacle));
     if (!blocked) {
       return { x, y, radius: 18, life: echoMaxLife, pulse: visualRandom() * 10 };
     }
   }
   return {
-    x: clamp(state.anomaly.x + Math.cos(angle + index) * 150, 130, 1150),
-    y: clamp(state.anomaly.y + Math.sin(angle + index) * 150, 134, 586),
+    x: clampWorldX(state.anomaly.x + Math.cos(angle + index) * 150, 18),
+    y: clampWorldY(state.anomaly.y + Math.sin(angle + index) * 150, 18),
     radius: 18,
     life: echoMaxLife,
     pulse: visualRandom() * 10
@@ -2481,20 +2563,28 @@ function promptFor(action, label) {
 function moveCircle(entity, dx, dy) {
   entity.x += dx;
   for (const wall of walls) {
-    resolveCircleRect(entity, wall);
+    resolveCircleObstacle(entity, wall);
   }
   for (const prop of props) {
-    resolveCircleRect(entity, prop);
+    resolveCircleObstacle(entity, prop);
   }
   entity.y += dy;
   for (const wall of walls) {
-    resolveCircleRect(entity, wall);
+    resolveCircleObstacle(entity, wall);
   }
   for (const prop of props) {
-    resolveCircleRect(entity, prop);
+    resolveCircleObstacle(entity, prop);
   }
-  entity.x = clamp(entity.x, 116, 1164);
-  entity.y = clamp(entity.y, 120, 600);
+  entity.x = clampWorldX(entity.x, entity.radius);
+  entity.y = clampWorldY(entity.y, entity.radius);
+}
+
+function resolveCircleObstacle(circle, obstacle) {
+  if (isSegmentWall(obstacle)) {
+    resolveCircleSegment(circle, obstacle);
+    return;
+  }
+  resolveCircleRect(circle, obstacle);
 }
 
 function resolveCircleRect(circle, rect) {
@@ -2510,9 +2600,48 @@ function resolveCircleRect(circle, rect) {
   }
 }
 
+function resolveCircleSegment(circle, segment) {
+  const closest = closestPointOnSegment(circle.x, circle.y, segment.x, segment.y, segment.x2, segment.y2);
+  const dx = circle.x - closest.x;
+  const dy = circle.y - closest.y;
+  const dist = Math.hypot(dx, dy);
+  const minDist = circle.radius + wallThickness(segment) / 2;
+  if (dist > 0 && dist < minDist) {
+    const push = minDist - dist;
+    circle.x += (dx / dist) * push;
+    circle.y += (dy / dist) * push;
+  } else if (dist === 0) {
+    const angle = Math.atan2(segment.y2 - segment.y, segment.x2 - segment.x) + Math.PI / 2;
+    circle.x += Math.cos(angle) * minDist;
+    circle.y += Math.sin(angle) * minDist;
+  }
+}
+
+function getInvestigatorFlashlightOrigin(agent) {
+  const aim = agent?.aim ?? 0;
+  const forward = investigatorVisual.flashlightForward;
+  const side = investigatorVisual.flashlightSideOffset;
+  return {
+    x: clamp(agent.x + Math.cos(aim) * forward - Math.sin(aim) * side, 0, world.width),
+    y: clamp(agent.y - investigatorVisual.flashlightChestLift + Math.sin(aim) * forward + Math.cos(aim) * side * 0.2, 0, world.height)
+  };
+}
+
+function getInvestigatorVisualBounds(agent) {
+  const width = hasInvestigatorAtlas(agent) ? investigatorVisual.atlasWidth : investigatorVisual.width;
+  const height = hasInvestigatorAtlas(agent) ? investigatorVisual.atlasHeight : investigatorVisual.height;
+  return {
+    x: agent.x - width / 2,
+    y: agent.y - height,
+    w: width,
+    h: height + 10
+  };
+}
+
 function inLightCone(agent, target) {
-  const dx = target.x - agent.x;
-  const dy = target.y - agent.y;
+  const origin = getInvestigatorFlashlightOrigin(agent);
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
   const dist = Math.hypot(dx, dy);
   if (dist > getFlashlightBeamRange(agent)) {
     return false;
@@ -2522,7 +2651,7 @@ function inLightCone(agent, target) {
   if (diff > GameBalance.tracker.flashlightBeamAngleRadians) {
     return false;
   }
-  return !segmentBlocked(agent.x, agent.y, target.x, target.y);
+  return !segmentBlocked(origin.x, origin.y, target.x, target.y);
 }
 
 function getFlashlightBeamRange(agent) {
@@ -2534,7 +2663,14 @@ function getFlashlightBeamRange(agent) {
 }
 
 function segmentBlocked(x1, y1, x2, y2) {
-  return [...walls, ...props].some((rect) => lineIntersectsRect(x1, y1, x2, y2, rect));
+  return [...walls, ...props].some((obstacle) => lineIntersectsObstacle(x1, y1, x2, y2, obstacle));
+}
+
+function lineIntersectsObstacle(x1, y1, x2, y2, obstacle) {
+  if (!isSegmentWall(obstacle)) {
+    return lineIntersectsRect(x1, y1, x2, y2, obstacle);
+  }
+  return segmentDistance(x1, y1, x2, y2, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= wallThickness(obstacle) / 2;
 }
 
 function lineIntersectsRect(x1, y1, x2, y2, rect) {
@@ -2554,6 +2690,61 @@ function pointInRect(x, y, rect) {
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
 }
 
+function pointInObstacle(x, y, obstacle) {
+  if (!isSegmentWall(obstacle)) {
+    return pointInRect(x, y, obstacle);
+  }
+  return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= wallThickness(obstacle) / 2;
+}
+
+function pointNearObstacle(x, y, radius, obstacle) {
+  if (isSegmentWall(obstacle)) {
+    return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= radius + wallThickness(obstacle) / 2;
+  }
+  const closestX = clamp(x, obstacle.x, obstacle.x + obstacle.w);
+  const closestY = clamp(y, obstacle.y, obstacle.y + obstacle.h);
+  return Math.hypot(x - closestX, y - closestY) <= radius;
+}
+
+function isSegmentWall(obstacle) {
+  return obstacle?.shape === "segment"
+    || (Number.isFinite(Number(obstacle?.x2)) && Number.isFinite(Number(obstacle?.y2)));
+}
+
+function wallThickness(obstacle) {
+  const fallback = obstacle?.visible === false ? 1 : 24;
+  const thickness = Number(obstacle?.thickness ?? fallback);
+  return Number.isFinite(thickness) ? thickness : fallback;
+}
+
+function closestPointOnSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) {
+    return { x: x1, y: y1 };
+  }
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / lengthSq, 0, 1);
+  return { x: x1 + dx * t, y: y1 + dy * t };
+}
+
+function distancePointToSegment(px, py, x1, y1, x2, y2) {
+  const point = closestPointOnSegment(px, py, x1, y1, x2, y2);
+  return Math.hypot(px - point.x, py - point.y);
+}
+
+function segmentDistance(x1, y1, x2, y2, x3, y3, x4, y4) {
+  if (linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4)) {
+    return 0;
+  }
+  return Math.min(
+    distancePointToSegment(x1, y1, x3, y3, x4, y4),
+    distancePointToSegment(x2, y2, x3, y3, x4, y4),
+    distancePointToSegment(x3, y3, x1, y1, x2, y2),
+    distancePointToSegment(x4, y4, x1, y1, x2, y2)
+  );
+}
+
 function linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
   const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
   if (den === 0) {
@@ -2569,11 +2760,12 @@ function angleDelta(a, b) {
 }
 
 function draw() {
-  const scaleX = canvas.width / world.width;
-  const scaleY = canvas.height / world.height;
+  const viewport = getCanvasViewport();
   const shake = !reduceMotion && cameraShake > 0 ? cameraShake * 18 : 0;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
-  ctx.scale(scaleX, scaleY);
+  ctx.translate(viewport.x, viewport.y);
+  ctx.scale(viewport.scale, viewport.scale);
   if (shake) {
     ctx.translate((visualRandom() - 0.5) * shake, (visualRandom() - 0.5) * shake);
   }
@@ -2582,6 +2774,7 @@ function draw() {
   drawRings();
   drawEchoes();
   drawAgents();
+  drawOcclusionOverlays();
   drawObjectiveHints();
   drawParticles();
   drawBlackoutDarkness();
@@ -2591,14 +2784,31 @@ function draw() {
   ctx.restore();
 }
 
+function getCanvasViewport() {
+  const scale = Math.min(canvas.width / world.width, canvas.height / world.height);
+  const width = world.width * scale;
+  const height = world.height * scale;
+  return {
+    scale,
+    x: (canvas.width - width) / 2,
+    y: (canvas.height - height) / 2,
+    width,
+    height
+  };
+}
+
 function drawWorld() {
+  const hasArtBackground = Boolean(mapBackgroundImage?.src);
   const floor = ctx.createLinearGradient(0, 0, world.width, world.height);
   floor.addColorStop(0, floorColors[0]);
   floor.addColorStop(0.45, floorColors[1]);
   floor.addColorStop(1, floorColors[2]);
   ctx.fillStyle = floor;
   ctx.fillRect(0, 0, world.width, world.height);
-  drawFloorMaterialTexture();
+  if (!hasArtBackground) {
+    drawFloorMaterialTexture();
+  }
+  drawMapImage(mapBackgroundImage);
 
   const centerGlow = ctx.createRadialGradient(world.width * 0.55, world.height * 0.48, 40, world.width * 0.55, world.height * 0.48, 620);
   centerGlow.addColorStop(0, "rgba(122, 228, 214, 0.08)");
@@ -2607,37 +2817,33 @@ function drawWorld() {
   ctx.fillStyle = centerGlow;
   ctx.fillRect(0, 0, world.width, world.height);
 
-  ctx.save();
-  ctx.globalAlpha = 0.12;
-  ctx.strokeStyle = "#8fb2bc";
-  ctx.lineWidth = 1;
-  for (let x = 96; x < 1190; x += 48) {
-    ctx.beginPath();
-    ctx.moveTo(x, 98);
-    ctx.lineTo(x, 622);
-    ctx.stroke();
+  if (!hasArtBackground) {
+    drawMapSetDressing();
   }
-  for (let y = 110; y < 622; y += 48) {
-    ctx.beginPath();
-    ctx.moveTo(92, y);
-    ctx.lineTo(1188, y);
-    ctx.stroke();
+  for (const decoration of mapDecorations) {
+    drawMapImage(decoration);
   }
-  ctx.restore();
 
-  drawMapSetDressing();
+  if (!hasArtBackground) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = "rgba(122, 228, 214, 0.42)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([18, 16]);
+    ctx.strokeRect(92, 98, 1096, 524);
+    ctx.restore();
+  }
 
-  ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.strokeStyle = "rgba(122, 228, 214, 0.42)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([18, 16]);
-  ctx.strokeRect(92, 98, 1096, 524);
-  ctx.restore();
-
-  for (const rect of walls) {
-    drawRect(rect, "#43515a", "#111820", "wall");
-    drawWallDetails(rect);
+  for (const wall of walls) {
+    if (wall.visible === false) {
+      continue;
+    }
+    if (isSegmentWall(wall)) {
+      drawWallSegment(wall);
+    } else {
+      drawRect(wall, "#43515a", "#111820", "wall");
+      drawWallDetails(wall);
+    }
   }
   for (const prop of props) {
     drawRect(prop, prop.color, "#10151a", "prop");
@@ -2673,6 +2879,44 @@ function drawFloorMaterialTexture() {
   ctx.fillStyle = pattern;
   ctx.fillRect(0, 0, world.width, world.height);
   ctx.restore();
+}
+
+function drawMapImage(imageRect) {
+  if (!imageRect?.src) {
+    return;
+  }
+  const image = getMapImage(imageRect.src);
+  if (!image?.complete || !image.naturalWidth) {
+    return;
+  }
+  ctx.save();
+  const width = imageRect.w ?? image.naturalWidth;
+  const height = imageRect.h ?? image.naturalHeight;
+  const x = imageRect.x ?? 0;
+  const y = imageRect.y ?? 0;
+  const rotation = ((imageRect.rotation ?? 0) * Math.PI) / 180;
+  ctx.translate(x + width / 2, y + height / 2);
+  ctx.rotate(rotation);
+  ctx.globalAlpha = Number.isFinite(imageRect.opacity) ? imageRect.opacity : 1;
+  ctx.drawImage(image, -width / 2, -height / 2, width, height);
+  ctx.restore();
+}
+
+function getMapImage(src) {
+  if (mapImageCache.has(src)) {
+    return mapImageCache.get(src);
+  }
+  if (typeof Image !== "function") {
+    mapImageCache.set(src, null);
+    return null;
+  }
+  const image = new Image();
+  image.addEventListener("load", () => {
+    if (!state.ended) draw();
+  }, { once: true });
+  image.src = src;
+  mapImageCache.set(src, image);
+  return image;
 }
 
 function getFloorPattern(mapName) {
@@ -2983,6 +3227,38 @@ function drawRect(rect, fill, stroke, kind = "surface") {
   ctx.restore();
 }
 
+function drawWallSegment(wall) {
+  const thickness = wallThickness(wall);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.34)";
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
+  ctx.strokeStyle = "#111820";
+  ctx.lineWidth = thickness + 4;
+  ctx.beginPath();
+  ctx.moveTo(wall.x, wall.y);
+  ctx.lineTo(wall.x2, wall.y2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.strokeStyle = "#43515a";
+  ctx.lineWidth = thickness;
+  ctx.beginPath();
+  ctx.moveTo(wall.x, wall.y);
+  ctx.lineTo(wall.x2, wall.y2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.24;
+  ctx.strokeStyle = "rgba(226, 238, 246, 0.72)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(wall.x, wall.y);
+  ctx.lineTo(wall.x2, wall.y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawPropDetails(prop) {
   ctx.save();
   ctx.globalAlpha = 0.28;
@@ -3200,7 +3476,6 @@ function drawRelay(relay) {
 
 function drawLighting() {
   ctx.save();
-  ctx.globalCompositeOperation = "screen";
   for (const agent of getInvestigators()) {
     if (!agent.lightOn || agent.resolve <= 0) {
       continue;
@@ -3209,24 +3484,7 @@ function drawLighting() {
     if (range <= 0) {
       continue;
     }
-    const beam = ctx.createRadialGradient(agent.x, agent.y, 20, agent.x, agent.y, range + 35);
-    beam.addColorStop(0, "rgba(235, 253, 255, 0.52)");
-    beam.addColorStop(0.36, "rgba(122, 228, 214, 0.18)");
-    beam.addColorStop(1, "rgba(122, 228, 214, 0)");
-    ctx.fillStyle = beam;
-    ctx.beginPath();
-    ctx.moveTo(agent.x, agent.y);
-    ctx.arc(agent.x, agent.y, range + 25, agent.aim - GameBalance.tracker.flashlightBeamAngleRadians, agent.aim + GameBalance.tracker.flashlightBeamAngleRadians);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle = "rgba(248, 251, 253, 0.32)";
-    ctx.beginPath();
-    ctx.moveTo(agent.x, agent.y);
-    ctx.arc(agent.x, agent.y, range * 0.77, agent.aim - 0.08, agent.aim + 0.08);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    drawFlashlightIllumination(agent, range);
   }
   if (lightning > 0) {
     ctx.globalAlpha = lightning * 0.42;
@@ -3250,6 +3508,173 @@ function drawLighting() {
   ctx.fillStyle = state.blackout > 0 && playerRole === "Anomaly" ? "rgba(0, 0, 0, 0.48)" : "rgba(0, 0, 0, 0.34)";
   ctx.fillRect(0, 0, world.width, world.height);
   ctx.restore();
+}
+
+function drawFlashlightIllumination(agent, range) {
+  const spread = GameBalance.tracker.flashlightBeamAngleRadians;
+  const origin = getInvestigatorFlashlightOrigin(agent);
+  const points = getFlashlightRayPoints(agent, origin, range, spread * 1.18);
+  if (points.length < 2) {
+    return;
+  }
+  const centerHit = castFlashlightRay(origin, agent.aim, range);
+  const focusX = centerHit.x;
+  const focusY = centerHit.y;
+  const focusDistance = distance(origin, centerHit);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(origin.x, origin.y);
+  for (const point of points) {
+    ctx.lineTo(point.x, point.y);
+  }
+  ctx.closePath();
+  ctx.clip();
+
+  ctx.globalCompositeOperation = "screen";
+  const spill = ctx.createRadialGradient(origin.x, origin.y, 12, origin.x, origin.y, range);
+  spill.addColorStop(0, "rgba(255, 250, 232, 0.44)");
+  spill.addColorStop(0.22, "rgba(255, 238, 192, 0.26)");
+  spill.addColorStop(0.58, "rgba(183, 229, 219, 0.13)");
+  spill.addColorStop(1, "rgba(122, 228, 214, 0)");
+  ctx.fillStyle = spill;
+  ctx.fillRect(origin.x - range, origin.y - range, range * 2, range * 2);
+
+  ctx.globalCompositeOperation = "overlay";
+  ctx.globalAlpha = 0.28;
+  const wash = ctx.createRadialGradient(focusX, focusY, 4, focusX, focusY, Math.max(70, range * 0.36));
+  wash.addColorStop(0, "rgba(255, 242, 198, 0.72)");
+  wash.addColorStop(0.48, "rgba(255, 223, 150, 0.28)");
+  wash.addColorStop(1, "rgba(255, 223, 150, 0)");
+  ctx.fillStyle = wash;
+  ctx.beginPath();
+  ctx.arc(focusX, focusY, Math.max(70, range * 0.36), 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = "rgba(255, 250, 226, 0.36)";
+  ctx.lineWidth = Math.max(16, 34 * (focusDistance / Math.max(range, 1)));
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(origin.x + Math.cos(agent.aim) * 8, origin.y + Math.sin(agent.aim) * 8);
+  ctx.lineTo(focusX, focusY);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.34;
+  const hotspot = ctx.createRadialGradient(focusX, focusY, 0, focusX, focusY, 58);
+  hotspot.addColorStop(0, "rgba(255, 252, 230, 0.82)");
+  hotspot.addColorStop(0.42, "rgba(255, 236, 184, 0.34)");
+  hotspot.addColorStop(1, "rgba(255, 236, 184, 0)");
+  ctx.fillStyle = hotspot;
+  ctx.beginPath();
+  ctx.arc(focusX, focusY, 58, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  const bulb = ctx.createRadialGradient(origin.x, origin.y, 0, origin.x, origin.y, 72);
+  bulb.addColorStop(0, "rgba(255, 250, 232, 0.34)");
+  bulb.addColorStop(0.46, "rgba(122, 228, 214, 0.12)");
+  bulb.addColorStop(1, "rgba(122, 228, 214, 0)");
+  ctx.fillStyle = bulb;
+  ctx.beginPath();
+  ctx.arc(origin.x, origin.y, 72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function getFlashlightRayPoints(agent, origin, range, spread) {
+  const points = [];
+  const steps = 18;
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const angle = agent.aim - spread + spread * 2 * t;
+    points.push(castFlashlightRay(origin, angle, range));
+  }
+  return points;
+}
+
+function castFlashlightRay(origin, angle, range) {
+  const end = {
+    x: clamp(origin.x + Math.cos(angle) * range, 0, world.width),
+    y: clamp(origin.y + Math.sin(angle) * range, 0, world.height)
+  };
+  let closest = { ...end, distance: distance(origin, end) };
+  for (const obstacle of [...walls, ...props]) {
+    const hit = raycastObstacle(origin.x, origin.y, end.x, end.y, obstacle);
+    if (hit && hit.distance < closest.distance) {
+      closest = hit;
+    }
+  }
+  return closest;
+}
+
+function raycastObstacle(x1, y1, x2, y2, obstacle) {
+  if (isSegmentWall(obstacle)) {
+    return raycastThickSegment(x1, y1, x2, y2, obstacle);
+  }
+  return raycastRect(x1, y1, x2, y2, obstacle);
+}
+
+function raycastThickSegment(x1, y1, x2, y2, segment) {
+  const thickness = wallThickness(segment) / 2;
+  const dx = segment.x2 - segment.x;
+  const dy = segment.y2 - segment.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / length) * thickness;
+  const ny = (dx / length) * thickness;
+  const corners = [
+    [segment.x + nx, segment.y + ny],
+    [segment.x2 + nx, segment.y2 + ny],
+    [segment.x2 - nx, segment.y2 - ny],
+    [segment.x - nx, segment.y - ny]
+  ];
+  return raycastPolygon(x1, y1, x2, y2, corners);
+}
+
+function raycastRect(x1, y1, x2, y2, rect) {
+  return raycastPolygon(x1, y1, x2, y2, [
+    [rect.x, rect.y],
+    [rect.x + rect.w, rect.y],
+    [rect.x + rect.w, rect.y + rect.h],
+    [rect.x, rect.y + rect.h]
+  ]);
+}
+
+function raycastPolygon(x1, y1, x2, y2, points) {
+  let closest = null;
+  for (let i = 0; i < points.length; i += 1) {
+    const [x3, y3] = points[i];
+    const [x4, y4] = points[(i + 1) % points.length];
+    const hit = segmentIntersectionPoint(x1, y1, x2, y2, x3, y3, x4, y4);
+    if (!hit) {
+      continue;
+    }
+    hit.distance = Math.hypot(hit.x - x1, hit.y - y1);
+    if (!closest || hit.distance < closest.distance) {
+      closest = hit;
+    }
+  }
+  return closest;
+}
+
+function segmentIntersectionPoint(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(den) < 0.0001) {
+    return null;
+  }
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
+  if (t < 0 || t > 1 || u < 0 || u > 1) {
+    return null;
+  }
+  return {
+    x: x1 + t * (x2 - x1),
+    y: y1 + t * (y2 - y1)
+  };
 }
 
 function drawBlackoutDarkness() {
@@ -3297,24 +3722,25 @@ function carveFlashlightVision(targetCtx, agent, range, spread) {
   if (range <= 0) {
     return;
   }
-  const beam = targetCtx.createRadialGradient(agent.x, agent.y, 18, agent.x, agent.y, range);
+  const origin = getInvestigatorFlashlightOrigin(agent);
+  const beam = targetCtx.createRadialGradient(origin.x, origin.y, 18, origin.x, origin.y, range);
   beam.addColorStop(0, "rgba(255, 255, 255, 1)");
   beam.addColorStop(0.34, "rgba(255, 255, 255, 0.88)");
   beam.addColorStop(0.74, "rgba(255, 255, 255, 0.42)");
   beam.addColorStop(1, "rgba(255, 255, 255, 0)");
   targetCtx.fillStyle = beam;
   targetCtx.beginPath();
-  targetCtx.moveTo(agent.x, agent.y);
-  targetCtx.arc(agent.x, agent.y, range, agent.aim - spread, agent.aim + spread);
+  targetCtx.moveTo(origin.x, origin.y);
+  targetCtx.arc(origin.x, origin.y, range, agent.aim - spread, agent.aim + spread);
   targetCtx.closePath();
   targetCtx.fill();
 
-  const core = targetCtx.createRadialGradient(agent.x, agent.y, 4, agent.x, agent.y, 72);
+  const core = targetCtx.createRadialGradient(origin.x, origin.y, 4, origin.x, origin.y, 72);
   core.addColorStop(0, "rgba(255, 255, 255, 0.85)");
   core.addColorStop(1, "rgba(255, 255, 255, 0)");
   targetCtx.fillStyle = core;
   targetCtx.beginPath();
-  targetCtx.arc(agent.x, agent.y, 72, 0, Math.PI * 2);
+  targetCtx.arc(origin.x, origin.y, 72, 0, Math.PI * 2);
   targetCtx.fill();
 }
 
@@ -3323,14 +3749,15 @@ function drawBlackoutFlashlightGlow(agent) {
   if (range <= 0) {
     return;
   }
-  const beam = ctx.createRadialGradient(agent.x, agent.y, 8, agent.x, agent.y, range + 5);
+  const origin = getInvestigatorFlashlightOrigin(agent);
+  const beam = ctx.createRadialGradient(origin.x, origin.y, 8, origin.x, origin.y, range + 5);
   beam.addColorStop(0, "rgba(248, 251, 253, 0.36)");
   beam.addColorStop(0.42, "rgba(122, 228, 214, 0.12)");
   beam.addColorStop(1, "rgba(122, 228, 214, 0)");
   ctx.fillStyle = beam;
   ctx.beginPath();
-  ctx.moveTo(agent.x, agent.y);
-  ctx.arc(agent.x, agent.y, range + 20, agent.aim - GameBalance.tracker.flashlightBeamAngleRadians, agent.aim + GameBalance.tracker.flashlightBeamAngleRadians);
+  ctx.moveTo(origin.x, origin.y);
+  ctx.arc(origin.x, origin.y, range + 20, agent.aim - GameBalance.tracker.flashlightBeamAngleRadians, agent.aim + GameBalance.tracker.flashlightBeamAngleRadians);
   ctx.closePath();
   ctx.fill();
 }
@@ -3340,6 +3767,67 @@ function drawAgents() {
     drawInvestigator(agent);
   }
   drawAnomaly(state.anomaly);
+}
+
+function drawOcclusionOverlays() {
+  if (!mapOccluders.length) {
+    return;
+  }
+  const source = mapForegroundImage?.src ? mapForegroundImage : mapBackgroundImage;
+  if (!source?.src) {
+    return;
+  }
+  const actors = [
+    ...getInvestigators().filter((agent) => agent.resolve > 0),
+    state.anomaly,
+    ...state.echoes
+  ];
+  for (const occluder of mapOccluders) {
+    if (!actors.some((actor) => actorBehindOccluder(actor, occluder))) {
+      continue;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
+    ctx.clip();
+    drawMapImage(source);
+    ctx.restore();
+  }
+}
+
+function actorBehindOccluder(actor, occluder) {
+  const depthY = Number(occluder.depthY ?? occluder.y + occluder.h);
+  const bounds = getActorVisualBounds(actor);
+  return actor.y < depthY && boundsOverlap(bounds, occluder);
+}
+
+function getActorVisualBounds(actor) {
+  if (typeof actor?.resolve === "number" && typeof actor?.battery === "number") {
+    return getInvestigatorVisualBounds(actor);
+  }
+  if (actor === state.anomaly) {
+    const size = 98 * anomalyVisualScale;
+    return {
+      x: actor.x - size / 2,
+      y: actor.y - size / 2,
+      w: size,
+      h: size
+    };
+  }
+  const radius = actor.radius ?? 18;
+  return {
+    x: actor.x - radius * 2,
+    y: actor.y - radius * 2,
+    w: radius * 4,
+    h: radius * 4
+  };
+}
+
+function boundsOverlap(a, b) {
+  return a.x + a.w >= b.x
+    && a.x <= b.x + b.w
+    && a.y + a.h >= b.y
+    && a.y <= b.y + b.h;
 }
 
 function drawEchoes() {
@@ -3381,6 +3869,9 @@ function drawHunterSprite(agent, down, isPlayer) {
     drawInvestigatorAtlasSprite(agent, down, isPlayer);
     return true;
   }
+  if (!down) {
+    return false;
+  }
   const stride = down ? 0 : Math.floor(performance.now() / 150 + agent.x * 0.01 + agent.y * 0.01) % 4;
   const sprite = getHunterSprite(agent.color, down, stride);
   if (!sprite) {
@@ -3393,7 +3884,13 @@ function drawHunterSprite(agent, down, isPlayer) {
   ctx.rotate(down ? agent.aim + Math.PI / 2 : agent.aim);
   ctx.shadowColor = down ? "rgba(0, 0, 0, 0.4)" : agent.color;
   ctx.shadowBlur = down ? 4 : 16;
-  ctx.drawImage(sprite, -37, -37, 74, 74);
+  ctx.drawImage(
+    sprite,
+    -investigatorVisual.downWidth / 2,
+    -investigatorVisual.downHeight / 2,
+    investigatorVisual.downWidth,
+    investigatorVisual.downHeight
+  );
   if (isPlayer) {
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#f8fbfd";
@@ -3433,7 +3930,23 @@ function drawInvestigatorAtlasSprite(agent, down, isPlayer) {
   }
   ctx.shadowColor = down ? "rgba(0, 0, 0, 0.42)" : agent.color;
   ctx.shadowBlur = down ? 4 : 16;
-  ctx.drawImage(sprite, -41, -68, 82, 82);
+  if (down) {
+    ctx.drawImage(
+      sprite,
+      -investigatorVisual.downWidth / 2,
+      -investigatorVisual.downHeight / 2,
+      investigatorVisual.downWidth,
+      investigatorVisual.downHeight
+    );
+  } else {
+    ctx.drawImage(
+      sprite,
+      -investigatorVisual.atlasWidth / 2,
+      -investigatorVisual.atlasHeight,
+      investigatorVisual.atlasWidth,
+      investigatorVisual.atlasHeight
+    );
+  }
   if (isPlayer) {
     ctx.shadowBlur = 0;
     ctx.strokeStyle = "#f8fbfd";
@@ -3801,7 +4314,8 @@ function drawAnomalySprite(anomaly, alpha) {
   ctx.save();
   ctx.globalAlpha = Math.min(1, alpha * 1.08);
   ctx.globalCompositeOperation = "screen";
-  ctx.drawImage(sprite, -47, -47, 94, 94);
+  const size = 94 * anomalyVisualScale;
+  ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
   ctx.restore();
   return true;
 }
@@ -3820,17 +4334,19 @@ function drawAnomalyAtlasSprite(anomaly, alpha) {
   if (pose.flip) {
     ctx.scale(-1, 1);
   }
-  ctx.drawImage(anomalyAtlas.image, sx, sy, anomalyAtlas.frame, anomalyAtlas.frame, -49, -49, 98, 98);
+  const size = 98 * anomalyVisualScale;
+  const half = size / 2;
+  ctx.drawImage(anomalyAtlas.image, sx, sy, anomalyAtlas.frame, anomalyAtlas.frame, -half, -half, size, size);
   if ((anomaly.damageFlash ?? 0) > 0) {
     ctx.globalCompositeOperation = "source-atop";
     ctx.globalAlpha = Math.min(0.74, (anomaly.damageFlash ?? 0) * alpha);
     ctx.fillStyle = "#ff3f55";
-    ctx.fillRect(-49, -49, 98, 98);
+    ctx.fillRect(-half, -half, size, size);
     ctx.globalCompositeOperation = "screen";
     ctx.globalAlpha = Math.min(0.5, (anomaly.damageFlash ?? 0) * 0.7);
     ctx.fillStyle = "rgba(255, 80, 70, 0.75)";
     ctx.beginPath();
-    ctx.arc(0, 0, 52, 0, Math.PI * 2);
+    ctx.arc(0, 0, 52 * anomalyVisualScale, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -3951,7 +4467,7 @@ function drawInvestigator(agent) {
   ctx.globalAlpha = 0.34;
   ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
   ctx.beginPath();
-  ctx.ellipse(agent.x, agent.y + agent.radius + 6, agent.radius * 1.15, agent.radius * 0.42, 0, 0, Math.PI * 2);
+  ctx.ellipse(agent.x, agent.y + 3, investigatorVisual.shadowWidth, investigatorVisual.shadowHeight, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -3964,57 +4480,66 @@ function drawInvestigator(agent) {
 
   const drewSprite = drawHunterSprite(agent, down, isPlayer);
   if (!drewSprite) {
+    const aimX = Math.cos(agent.aim);
+    const aimY = Math.sin(agent.aim);
+    const stride = Math.sin(performance.now() / 120 + agent.x * 0.03 + agent.y * 0.02) * 3;
+    const handX = aimX >= 0 ? 15 : -15;
+    const handY = -43 + aimY * 5;
     ctx.save();
     ctx.globalAlpha = blinkAlpha;
     ctx.translate(agent.x, agent.y);
-    ctx.rotate(agent.aim);
     ctx.shadowColor = agent.color;
     ctx.shadowBlur = down ? 0 : 18;
+    ctx.strokeStyle = "#071015";
+    ctx.lineWidth = 4;
+
+    ctx.strokeStyle = down ? "rgba(32, 40, 46, 0.72)" : darkenColor(agent.color, 0.34);
+    ctx.beginPath();
+    ctx.moveTo(-7, -8);
+    ctx.lineTo(-12, -2 + stride);
+    ctx.moveTo(8, -8);
+    ctx.lineTo(13, -2 - stride);
+    ctx.stroke();
+
     ctx.fillStyle = down ? "#53606a" : darkenColor(agent.color, 0.18);
     ctx.strokeStyle = "#071015";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(-agent.radius * 0.92, -agent.radius * 0.82, agent.radius * 1.82, agent.radius * 1.64, 10);
+    ctx.roundRect(-15, -56, 30, 46, 12);
     ctx.fill();
     ctx.stroke();
-    ctx.strokeStyle = down ? "rgba(120, 130, 138, 0.5)" : lightenColor(agent.color, 0.38);
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-agent.radius * 0.62, -agent.radius * 0.55);
-    ctx.lineTo(agent.radius * 0.48, -agent.radius * 0.55);
-    ctx.stroke();
+
     ctx.fillStyle = down ? "#2b3339" : agent.color;
     ctx.beginPath();
-    ctx.arc(-3, 0, agent.radius * 0.72, 0, Math.PI * 2);
+    ctx.arc(0, -65, 14, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = down ? "#273039" : darkenColor(agent.color, 0.34);
+
+    ctx.fillStyle = down ? "#20282e" : "rgba(5, 8, 12, 0.72)";
     ctx.beginPath();
-    ctx.roundRect(-agent.radius * 0.54, agent.radius * 0.52, agent.radius * 1.06, 8, 4);
+    ctx.roundRect(-8, -68, 16, 9, 4);
     ctx.fill();
+
+    ctx.strokeStyle = down ? "rgba(32, 40, 46, 0.7)" : lightenColor(agent.color, 0.36);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(aimX >= 0 ? 10 : -10, -43);
+    ctx.lineTo(handX, handY);
+    ctx.stroke();
+
     ctx.fillStyle = down ? "#2b3339" : "#e9fbff";
+    ctx.strokeStyle = "#071015";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(4, -6, 24, 12, 5);
+    ctx.roundRect(handX - (aimX >= 0 ? 0 : 22), handY - 6, 22, 12, 5);
     ctx.fill();
-    ctx.fillStyle = down ? "#20282e" : "rgba(5, 8, 12, 0.74)";
-    ctx.beginPath();
-    ctx.roundRect(-8, -7, 13, 14, 5);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.54)";
-    ctx.fillRect(11, -3, 11, 2);
-    ctx.fillStyle = down ? "#1b2228" : "#dff7ff";
-    ctx.beginPath();
-    ctx.arc(-5, -3, 2.4, 0, Math.PI * 2);
-    ctx.arc(0, -3, 2.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = down ? "rgba(32, 40, 46, 0.7)" : "rgba(223, 247, 255, 0.5)";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-agent.radius * 0.52, -agent.radius * 0.14);
-    ctx.lineTo(-agent.radius * 0.76, agent.radius * 0.3);
-    ctx.moveTo(agent.radius * 0.38, agent.radius * 0.04);
-    ctx.lineTo(agent.radius * 0.66, agent.radius * 0.36);
     ctx.stroke();
+
+    ctx.fillStyle = down ? "#273039" : lightenColor(agent.color, 0.28);
+    ctx.beginPath();
+    ctx.roundRect(-12, -31, 24, 10, 5);
+    ctx.fill();
+
     if (isPlayer) {
       ctx.strokeStyle = "#f8fbfd";
       ctx.lineWidth = 2;
@@ -4027,9 +4552,10 @@ function drawInvestigator(agent) {
 
   ctx.save();
   ctx.fillStyle = "rgba(5, 8, 12, 0.68)";
-  ctx.fillRect(agent.x - 20, agent.y + 24, 40, 5);
+  const barY = agent.y - investigatorVisual.barOffset;
+  ctx.fillRect(agent.x - 22, barY, 44, 5);
   ctx.fillStyle = agent.resolve > 30 ? "#7ae4d6" : "#e76f8a";
-  ctx.fillRect(agent.x - 20, agent.y + 24, 40 * (agent.resolve / 100), 5);
+  ctx.fillRect(agent.x - 22, barY, 44 * (agent.resolve / 100), 5);
   if (down) {
     const progress = clamp(agent.reviveProgress / reviveSeconds, 0, 1);
     ctx.strokeStyle = "#7ae4d6";
@@ -4040,10 +4566,10 @@ function drawInvestigator(agent) {
     ctx.fillStyle = "#dff7ff";
     ctx.font = "800 12px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("REVIVE", agent.x, agent.y - 52);
+    ctx.fillText("REVIVE", agent.x, agent.y - investigatorVisual.reviveLabelOffset);
   } else {
     drawProximityWarning(agent);
-    drawNameplate(agent.x, agent.y - 58, agent.name, getInvestigatorStateLabel(agent, isPlayer), agent.color);
+    drawNameplate(agent.x, agent.y - investigatorVisual.nameplateOffset, agent.name, getInvestigatorStateLabel(agent, isPlayer), agent.color);
   }
   ctx.restore();
 }
@@ -4109,7 +4635,7 @@ function drawProximityWarning(agent) {
   }
   const critical = level === 2;
   const pulse = Math.sin(performance.now() * (critical ? 0.014 : 0.009)) * 0.5 + 0.5;
-  const y = agent.y - 82 - pulse * 3;
+  const y = agent.y - investigatorVisual.nameplateOffset - 22 - pulse * 3;
   ctx.save();
   ctx.globalAlpha = critical ? 0.92 : 0.78;
   ctx.fillStyle = critical ? "rgba(231, 111, 138, 0.9)" : "rgba(244, 179, 93, 0.88)";
@@ -4145,6 +4671,8 @@ function drawAnomaly(anomaly) {
   ctx.globalAlpha = alpha;
   ctx.translate(anomaly.x, anomaly.y);
   if (!usingAtlas) {
+    ctx.save();
+    ctx.scale(anomalyVisualScale, anomalyVisualScale);
     ctx.rotate(Math.sin(performance.now() * 0.0018) * 0.08);
     ctx.shadowColor = "#e76f8a";
     ctx.shadowBlur = 28;
@@ -4187,10 +4715,13 @@ function drawAnomaly(anomaly) {
     ctx.beginPath();
     ctx.arc(-5, -5, anomaly.radius * 0.34, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
   drawAnomalySprite(anomaly, alpha);
   drawAnomalyStateEffects(anomaly, alpha);
   if (!usingAtlas) {
+    ctx.save();
+    ctx.scale(anomalyVisualScale, anomalyVisualScale);
     ctx.globalAlpha = alpha * 0.58;
     ctx.fillStyle = "#ffd6df";
     for (let i = 0; i < 4; i += 1) {
@@ -4218,6 +4749,7 @@ function drawAnomaly(anomaly) {
     ctx.moveTo(0, -anomaly.radius - 6);
     ctx.lineTo(4, anomaly.radius + 5);
     ctx.stroke();
+    ctx.restore();
   }
   if (playerRole === "Anomaly") {
     ctx.strokeStyle = "#f8fbfd";
@@ -5098,8 +5630,29 @@ function publishPartySnapshot() {
       resolve: Math.round(agent.resolve),
       battery: Math.round(agent.battery)
     })),
-    walls: walls.map((wall) => ({ x: wall.x, y: wall.y, w: wall.w, h: wall.h }))
+    walls: walls.map(snapshotWall)
   });
+}
+
+function snapshotWall(wall) {
+  if (isSegmentWall(wall)) {
+    return {
+      shape: "segment",
+      x: Math.round(wall.x),
+      y: Math.round(wall.y),
+      x2: Math.round(wall.x2),
+      y2: Math.round(wall.y2),
+      thickness: Math.round(wallThickness(wall)),
+      ...(wall.visible === false ? { visible: false } : {})
+    };
+  }
+  return {
+    x: Math.round(wall.x),
+    y: Math.round(wall.y),
+    w: Math.round(wall.w),
+    h: Math.round(wall.h),
+    ...(wall.visible === false ? { visible: false } : {})
+  };
 }
 
 function showResults(text, achievements = [], career = services.stats.getProfile()) {
@@ -5643,8 +6196,12 @@ function toggleSound() {
     if (ensureAudio()) {
       setStatus(`Sound on (${audioContext?.state ?? "pending"})`);
       playSound("audio_test");
+      if (state.phase === "playing") {
+        startMapMusic();
+      }
     }
   } else {
+    stopMapMusic();
     setStatus("Sound off");
   }
 }
@@ -5992,6 +6549,96 @@ function playManifestSound(type) {
   return true;
 }
 
+function startMapMusic() {
+  if (!soundEnabled || !ensureAudio()) {
+    return;
+  }
+  const track = maps[currentMapName]?.music;
+  const src = track?.src;
+  if (!src) {
+    stopMapMusic();
+    return;
+  }
+  if (currentMusicSource && currentMusicTrackSrc === src) {
+    return;
+  }
+  stopMapMusic();
+  requestedMusicTrackSrc = src;
+  getDecodedAudioBuffer(src)
+    .then((buffer) => {
+      if (!soundEnabled || state.phase !== "playing" || requestedMusicTrackSrc !== src) {
+        return;
+      }
+      const source = audioContext.createBufferSource();
+      const gain = audioContext.createGain();
+      source.buffer = buffer;
+      source.loop = track.loop !== false;
+      gain.gain.setValueAtTime(clamp(Number(track.volume ?? 1), 0, 1), audioContext.currentTime);
+      source.connect(gain).connect(getAudioDestination("music"));
+      source.start();
+      currentMusicSource = source;
+      currentMusicGain = gain;
+      currentMusicTrackSrc = src;
+    })
+    .catch(() => {
+      if (requestedMusicTrackSrc === src) {
+        setStatus("Map music could not be loaded");
+      }
+    });
+}
+
+function stopMapMusic() {
+  requestedMusicTrackSrc = "";
+  if (currentMusicSource) {
+    try {
+      currentMusicSource.stop();
+    } catch {
+      // Source may already be stopped.
+    }
+    currentMusicSource.disconnect?.();
+  }
+  currentMusicGain?.disconnect?.();
+  currentMusicSource = null;
+  currentMusicGain = null;
+  currentMusicTrackSrc = "";
+}
+
+function getDecodedAudioBuffer(src) {
+  const cached = audioBuffers.get(src);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+  if (missingAudioAssets.has(src)) {
+    return Promise.reject(new Error(`missing audio ${src}`));
+  }
+  const pending = audioBufferPromises.get(src);
+  if (pending) {
+    return pending;
+  }
+  audioBuffers.set(src, null);
+  const request = fetch(src)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`missing audio ${src}`);
+      }
+      return response.arrayBuffer();
+    })
+    .then((data) => audioContext.decodeAudioData(data))
+    .then((buffer) => {
+      audioBuffers.set(src, buffer);
+      audioBufferPromises.delete(src);
+      return buffer;
+    })
+    .catch((error) => {
+      audioBuffers.delete(src);
+      audioBufferPromises.delete(src);
+      missingAudioAssets.add(src);
+      throw error;
+    });
+  audioBufferPromises.set(src, request);
+  return request;
+}
+
 function loadAudioBuffer(src) {
   if (audioBuffers.has(src) || missingAudioAssets.has(src)) {
     return;
@@ -6068,6 +6715,9 @@ function unlockAudioFromGesture() {
   }
   audioUnlockPending = false;
   playSound("audio_test");
+  if (state.phase === "playing") {
+    startMapMusic();
+  }
 }
 
 function resizeCanvas() {
@@ -6409,8 +7059,11 @@ window.addEventListener("gamepaddisconnected", () => {
 canvas.addEventListener("pointermove", (event) => {
   setInputMode("keyboard");
   const rect = canvas.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * world.width;
-  mouse.y = ((event.clientY - rect.top) / rect.height) * world.height;
+  const dprX = canvas.width / rect.width;
+  const dprY = canvas.height / rect.height;
+  const viewport = getCanvasViewport();
+  mouse.x = clamp(((event.clientX - rect.left) * dprX - viewport.x) / viewport.scale, 0, world.width);
+  mouse.y = clamp(((event.clientY - rect.top) * dprY - viewport.y) / viewport.scale, 0, world.height);
 });
 
 canvas.addEventListener("pointerdown", () => {

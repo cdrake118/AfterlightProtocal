@@ -50,6 +50,7 @@ function renderPreview(map, source, mapPath) {
   const imageLayers = (map.layers ?? []).filter((layer) => layer.type === "imagelayer");
   const walls = objects(layers, "collision", "wall");
   const props = objects(layers, "props", "prop");
+  const decorations = objects(layers, "decorations", "decoration");
   const investigatorSpawns = objects(layers, "spawns", "investigatorSpawn");
   const anomalySpawns = objects(layers, "spawns", "anomalySpawn");
   const batteries = objects(layers, "batteries", "batterySpawn");
@@ -75,8 +76,11 @@ ${grid}
   <g id="props" filter="url(#softShadow)">
 ${props.map((object) => rect(object, property(object, "color", "#26323a"), "rgba(223,247,255,0.18)")).join("\n")}
   </g>
+  <g id="decorations">
+${decorations.map(decorationImage).join("\n")}
+  </g>
   <g id="collision">
-${walls.map((object) => rect(object, "#44515a", "rgba(223,247,255,0.36)")).join("\n")}
+${walls.map(collisionShape).join("\n")}
   </g>
   <g id="batteries">
 ${batteries.map((object) => marker(object, "#f4e15d", "B")).join("\n")}
@@ -106,6 +110,7 @@ ${labels.map(label).join("\n")}
     counts: {
       walls: walls.length,
       props: props.length,
+      decorations: decorations.length,
       investigatorSpawns: investigatorSpawns.length,
       anomalySpawns: anomalySpawns.length,
       batteries: batteries.length,
@@ -120,22 +125,43 @@ function objects(layers, layerName, type) {
   return (layers.get(layerName)?.objects ?? []).filter((object) => object.type === type);
 }
 
-function rect(object, fill, stroke) {
-  return `    <rect x="${n(object.x)}" y="${n(object.y)}" width="${n(object.width)}" height="${n(object.height)}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+function rect(object, fill, stroke, dashed = false) {
+  return `    <rect x="${n(object.x)}" y="${n(object.y)}" width="${n(object.width)}" height="${n(object.height)}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="2"${dashed ? " stroke-dasharray=\"12 8\"" : ""}/>`;
+}
+
+function collisionShape(object) {
+  const invisible = String(property(object, "visible", "true")) === "false";
+  const fill = invisible ? "rgba(231,111,138,0.08)" : "#44515a";
+  const stroke = invisible ? "rgba(231,111,138,0.72)" : "rgba(223,247,255,0.36)";
+  if (object.polyline?.length >= 2) {
+    const end = object.polyline[1];
+    const thickness = n(Number(property(object, "thickness", invisible ? 1 : 24)));
+    return `    <line x1="${n(object.x)}" y1="${n(object.y)}" x2="${n(object.x + end.x)}" y2="${n(object.y + end.y)}" stroke="${fill}" stroke-width="${thickness}" stroke-linecap="round"${invisible ? " stroke-dasharray=\"18 12\"" : ""}/>
+    <line x1="${n(object.x)}" y1="${n(object.y)}" x2="${n(object.x + end.x)}" y2="${n(object.y + end.y)}" stroke="${stroke}" stroke-width="2" stroke-linecap="round"${invisible ? " stroke-dasharray=\"18 12\"" : ""}/>`;
+  }
+  return rect(object, fill, stroke, invisible);
 }
 
 function imageLayer(layer, mapDir) {
   if (!layer.image || /^https?:\/\//i.test(layer.image)) {
     return `    <rect x="0" y="0" width="100%" height="100%" fill="rgba(136,165,181,0.08)" stroke="rgba(136,165,181,0.32)" stroke-width="2"/>`;
   }
-  const imagePath = resolve(mapDir, layer.image);
-  const href = relative(distRoot, imagePath).replaceAll("\\", "/");
+  const href = /^data:image\//i.test(layer.image) ? layer.image : relative(distRoot, resolve(mapDir, layer.image)).replaceAll("\\", "/");
   const x = n(layer.x ?? layer.offsetx ?? 0);
   const y = n(layer.y ?? layer.offsety ?? 0);
   const width = Number.isFinite(layer.imagewidth ?? layer.width) ? n(layer.imagewidth ?? layer.width) : "100%";
   const height = Number.isFinite(layer.imageheight ?? layer.height) ? n(layer.imageheight ?? layer.height) : "100%";
   const opacity = Number.isFinite(layer.opacity) ? layer.opacity : 0.72;
   return `    <image href="${escapeXml(href)}" x="${x}" y="${y}" width="${width}" height="${height}" opacity="${n(opacity)}" preserveAspectRatio="xMidYMid meet"/>`;
+}
+
+function decorationImage(object) {
+  const href = property(object, "image", "");
+  const opacity = Number(property(object, "opacity", 1));
+  if (!href) {
+    return rect(object, "rgba(122,228,214,0.08)", "rgba(122,228,214,0.42)", true);
+  }
+  return `    <image href="${escapeXml(href)}" x="${n(object.x)}" y="${n(object.y)}" width="${n(object.width)}" height="${n(object.height)}" opacity="${n(opacity)}" preserveAspectRatio="xMidYMid meet"/>`;
 }
 
 function marker(object, fill, text) {

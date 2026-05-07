@@ -100,7 +100,7 @@ async function validateMap(source) {
   const labels = objects(layers, "labels", "label");
   const mapDir = dirname(absolutePath);
 
-  if (walls.length < 4) errors.push("collision layer needs at least four wall rectangles");
+  if (walls.length < 4) errors.push("collision layer needs at least four wall objects");
   if (investigatorSpawns.length < 2) errors.push("spawns layer needs at least two investigatorSpawn points");
   if (investigatorSpawns.length > 5) warnings.push("only the host plus four investigator spawns are used in the next-weekend build");
   if (anomalySpawns.length !== 1) errors.push("spawns layer needs exactly one anomalySpawn point");
@@ -116,6 +116,10 @@ async function validateMap(source) {
       errors.push(`image layer ${layer.name || layer.image} must use a local project asset, not a remote URL`);
       continue;
     }
+    if (/^data:image\//i.test(layer.image)) {
+      warnings.push(`image layer ${layer.name || "embedded image"} uses embedded data; move it to assets/maps before production packaging`);
+      continue;
+    }
     try {
       await readFile(resolve(mapDir, layer.image));
     } catch {
@@ -124,20 +128,20 @@ async function validateMap(source) {
   }
 
   for (const wall of walls) {
-    validateRect(wall, mapBounds, errors, "wall");
+    validateWall(wall, mapBounds, errors);
   }
   for (const prop of props) {
     validateRect(prop, mapBounds, errors, "prop");
   }
   for (const spawn of [...investigatorSpawns, ...anomalySpawns]) {
     validatePoint(spawn, mapBounds, errors, "spawn");
-    if (insideAnyRect(spawn, walls)) {
+    if (insideAnyObstacle(spawn, walls)) {
       errors.push(`${nameOf(spawn)} is inside a collision wall`);
     }
   }
   for (const battery of batteries) {
     validatePoint(battery, mapBounds, errors, "battery");
-    if (insideAnyRect(battery, walls)) {
+    if (insideAnyObstacle(battery, walls)) {
       errors.push(`${nameOf(battery)} is inside a collision wall`);
     }
   }
@@ -184,6 +188,28 @@ function validateRect(object, bounds, errors, label) {
   }
 }
 
+function validateWall(object, bounds, errors) {
+  if (object.polyline?.length >= 2) {
+    validatePoint(object, bounds, errors, "wall start");
+    const end = {
+      x: object.x + object.polyline[1].x,
+      y: object.y + object.polyline[1].y,
+      name: `${object.name || object.id || "wall"} end`
+    };
+    validatePoint(end, bounds, errors, "wall end");
+    if (distance(object, end) < 8) {
+      errors.push(`${nameOf(object)} wall segment needs two distinct points`);
+    }
+    const invisible = String(property(object, "visible", "true")) === "false";
+    const thickness = Number(property(object, "thickness", invisible ? 1 : 24));
+    if (!Number.isFinite(thickness) || thickness <= 0) {
+      errors.push(`${nameOf(object)} wall segment needs positive thickness`);
+    }
+    return;
+  }
+  validateRect(object, bounds, errors, "wall");
+}
+
 function validatePoint(object, bounds, errors, label) {
   if (!Number.isFinite(object.x) || !Number.isFinite(object.y)) {
     errors.push(`${nameOf(object)} ${label} needs numeric x/y`);
@@ -205,6 +231,29 @@ function insideAnyRect(point, rects) {
     && point.x <= rect.x + rect.width
     && point.y >= rect.y
     && point.y <= rect.y + rect.height);
+}
+
+function insideAnyObstacle(point, obstacles) {
+  return obstacles.some((obstacle) => {
+    if (obstacle.polyline?.length >= 2) {
+      const end = {
+        x: obstacle.x + obstacle.polyline[1].x,
+        y: obstacle.y + obstacle.polyline[1].y
+      };
+      const invisible = String(property(obstacle, "visible", "true")) === "false";
+      return distancePointToSegment(point.x, point.y, obstacle.x, obstacle.y, end.x, end.y) <= Number(property(obstacle, "thickness", invisible ? 1 : 24)) / 2;
+    }
+    return insideAnyRect(point, [obstacle]);
+  });
+}
+
+function distancePointToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSq = dx * dx + dy * dy;
+  if (!lengthSq) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSq));
+  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
 }
 
 function nameOf(object) {

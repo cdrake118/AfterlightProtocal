@@ -16,6 +16,11 @@ const layers = new Map((map.layers ?? []).map((layer) => [layer.name, layer]));
 
 const converted = {
   name: property(map, "name", "Manor Party"),
+  size: {
+    width: 1280,
+    height: 720,
+    aspectRatio: "16:9"
+  },
   floor: ["#17151a", "#2a1922", "#2a2f1d"],
   event: {
     name: "Storm Flash",
@@ -34,8 +39,15 @@ const converted = {
   ]),
   batteries: objects("batteries", "batterySpawn").map((object) => point(object)),
   relays: [],
+  backgroundImage: imageLayer("art-background"),
+  decorations: objects("decorations", "decoration").map((object, index) => ({
+    ...rect(object),
+    name: object.name || `Decoration ${index + 1}`,
+    src: property(object, "image", ""),
+    opacity: Number(property(object, "opacity", 1))
+  })).filter((object) => object.src),
   labels: objects("labels", "label").map((object) => [Math.round(object.x), Math.round(object.y), object.name || "ROOM"]),
-  walls: objects("collision", "wall").map(rect),
+  walls: objects("collision", "wall").map(collisionObject),
   props: objects("props", "prop").map((object) => ({
     ...rect(object),
     color: property(object, "color", "#26323a")
@@ -61,6 +73,20 @@ function firstObject(layerName, type) {
   return objects(layerName, type)[0] ?? null;
 }
 
+function imageLayer(layerName) {
+  const layer = layers.get(layerName);
+  if (!layer?.image) return null;
+  return {
+    name: property(layer, "name", layer.name || "Floor Image"),
+    src: layer.image,
+    x: Math.round(layer.x ?? layer.offsetx ?? 0),
+    y: Math.round(layer.y ?? layer.offsety ?? 0),
+    w: Math.round(layer.imagewidth ?? layer.width ?? 1280),
+    h: Math.round(layer.imageheight ?? layer.height ?? 720),
+    opacity: Number(layer.opacity ?? 1)
+  };
+}
+
 function point(object, fallback = [0, 0]) {
   return object ? [Math.round(object.x), Math.round(object.y)] : fallback;
 }
@@ -71,6 +97,24 @@ function rect(object) {
     y: Math.round(object.y),
     w: Math.round(object.width ?? 0),
     h: Math.round(object.height ?? 0)
+  };
+}
+
+function collisionObject(object) {
+  if (object.polyline?.length >= 2) {
+    return {
+      shape: "segment",
+      x: Math.round(object.x),
+      y: Math.round(object.y),
+      x2: Math.round(object.x + object.polyline[1].x),
+      y2: Math.round(object.y + object.polyline[1].y),
+      thickness: Number(property(object, "thickness", String(property(object, "visible", "true")) === "false" ? 1 : 24)),
+      ...(String(property(object, "visible", "true")) === "false" ? { visible: false } : {})
+    };
+  }
+  return {
+    ...rect(object),
+    ...(String(property(object, "visible", "true")) === "false" ? { visible: false } : {})
   };
 }
 

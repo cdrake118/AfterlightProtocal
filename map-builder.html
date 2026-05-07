@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Afterlight Protocol | Map Builder</title>
+    <link rel="stylesheet" href="map-builder.css?v=20260504-06">
+    <script src="map-builder.js?v=20260504-06" defer></script>
+  </head>
+  <body>
+    <main class="builder-shell">
+      <header class="builder-header">
+        <div>
+          <p class="label">Afterlight Protocol</p>
+          <h1>Map Builder</h1>
+        </div>
+        <nav class="builder-nav" aria-label="Builder navigation">
+          <a href="guide.html">Guide</a>
+          <a href="/host">Host</a>
+          <a href="docs/MAP_PIPELINE.md">Pipeline</a>
+        </nav>
+      </header>
+
+      <section class="builder-workspace" aria-label="Map editing workspace">
+        <aside class="builder-panel builder-tools" aria-label="Builder tools">
+          <div class="panel-section">
+            <label class="field">
+              <span>Map Name</span>
+              <input id="mapName" type="text" maxlength="48" autocomplete="off" placeholder="Jungle">
+            </label>
+            <div class="color-row" aria-label="Floor colors" hidden>
+              <label>
+                <span>Floor A</span>
+                <input id="floorA" type="color">
+              </label>
+              <label>
+                <span>Floor B</span>
+                <input id="floorB" type="color">
+              </label>
+              <label>
+                <span>Floor C</span>
+                <input id="floorC" type="color">
+              </label>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Tools</p>
+            <div class="tool-grid" role="toolbar" aria-label="Map object tools">
+              <button class="tool-button is-active" type="button" data-tool="select" aria-pressed="true">Select</button>
+              <button class="tool-button" type="button" data-tool="wall" aria-pressed="false">Wall</button>
+              <button class="tool-button" type="button" data-tool="barrier" aria-pressed="false">Barrier</button>
+              <button class="tool-button" type="button" data-tool="occluder" aria-pressed="false">Occluder</button>
+              <button class="tool-button" type="button" data-tool="prop" aria-pressed="false">Prop</button>
+              <button class="tool-button" type="button" data-tool="decoration" aria-pressed="false">Image</button>
+              <button class="tool-button" type="button" data-tool="investigator" aria-pressed="false">Investigator</button>
+              <button class="tool-button" type="button" data-tool="anomaly" aria-pressed="false">Anomaly</button>
+              <button class="tool-button" type="button" data-tool="battery" aria-pressed="false">Battery</button>
+              <button class="tool-button" type="button" data-tool="label" aria-pressed="false">Label</button>
+              <button class="tool-button" type="button" data-tool="erase" aria-pressed="false">Erase</button>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Map Actions</p>
+            <div class="action-grid">
+              <button id="newMapBtn" type="button">New</button>
+              <button id="sampleBtn" type="button">Sample</button>
+              <button id="undoBtn" type="button">Undo</button>
+              <button id="redoBtn" type="button">Redo</button>
+              <button id="copyComponentBtn" type="button">Copy</button>
+              <button id="pasteComponentBtn" type="button">Paste</button>
+              <button id="importBtn" type="button">Import</button>
+              <button id="validateBtn" type="button">Validate</button>
+              <button id="analysisBtn" type="button" aria-pressed="false">QA Overlay</button>
+              <button id="playtestBtn" type="button">Playtest</button>
+            </div>
+            <input id="importFile" type="file" accept=".json,application/json" hidden>
+          </div>
+
+          <div class="panel-section" hidden>
+            <p class="section-title">Templates</p>
+            <div class="template-grid">
+              <button type="button" data-template="blank">Blank</button>
+              <button type="button" data-template="small">Small Party</button>
+              <button type="button" data-template="large">Large Party</button>
+              <button type="button" data-template="manor">Manor</button>
+              <button type="button" data-template="lab">Lab</button>
+              <button type="button" data-template="aquarium">Aquarium</button>
+            </div>
+          </div>
+
+          <div class="panel-section" hidden>
+            <p class="section-title">Presets</p>
+            <div class="template-grid">
+              <button type="button" data-preset="room">Room</button>
+              <button type="button" data-preset="corridor">Corridor</button>
+              <button type="button" data-preset="doorway">Door Gap</button>
+              <button type="button" data-preset="table">Table</button>
+              <button type="button" data-preset="shelf">Shelf</button>
+              <button type="button" data-preset="pillar">Pillar</button>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Snap</p>
+            <label class="field">
+              <span>Mode</span>
+              <select id="snapMode">
+                <option value="grid" selected>Grid</option>
+                <option value="edges">Object Edges</option>
+                <option value="centers">Object Centers</option>
+                <option value="bounds">Map Bounds</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Media</p>
+            <div class="action-grid">
+              <button id="backgroundBtn" type="button">Floor Image</button>
+              <button id="selectBackgroundBtn" type="button">Select Floor</button>
+              <button id="foregroundBtn" type="button">Foreground</button>
+              <button id="selectForegroundBtn" type="button">Select Foreground</button>
+              <button id="decorationBtn" type="button">Prop Image</button>
+              <button id="clearBackgroundBtn" type="button">Clear Floor</button>
+              <button id="clearForegroundBtn" type="button">Clear Foreground</button>
+              <button id="musicBtn" type="button">Upload MP3</button>
+              <button id="clearMusicBtn" type="button">Clear Music</button>
+            </div>
+            <div id="mediaStatus" class="muted">No prop image loaded</div>
+            <div id="musicStatus" class="muted">No map music loaded</div>
+            <label class="field">
+              <span>Music Library</span>
+              <select id="musicLibrarySelect"></select>
+            </label>
+            <div class="action-grid compact-actions">
+              <button id="useMusicBtn" type="button">Use Music</button>
+              <button id="refreshMusicBtn" type="button">Refresh</button>
+              <button id="deleteMusicBtn" class="danger-button" type="button">Remove</button>
+            </div>
+            <label class="field" id="musicVolumeField">
+              <span>Music Volume <strong id="musicVolumeValue">100%</strong></span>
+              <input id="mapMusicVolume" type="range" min="0" max="1" step="0.05" value="1">
+            </label>
+            <div id="assetTray" class="asset-tray" aria-label="Uploaded prop image tray"></div>
+            <input id="backgroundFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+            <input id="foregroundFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+            <input id="decorationFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
+            <input id="musicFile" type="file" accept="audio/mpeg,audio/mp3,.mp3" hidden>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Saved Maps</p>
+            <label class="field">
+              <span>Load/Delete Slot</span>
+              <select id="savedMapSelect"></select>
+            </label>
+            <div class="action-grid">
+              <button id="saveNamedBtn" type="button">Save</button>
+              <button id="loadNamedBtn" type="button">Load</button>
+              <button id="deleteNamedBtn" class="danger-button" type="button">Delete</button>
+              <button id="saveDraftBtn" type="button">Quick Save</button>
+              <button id="loadDraftBtn" type="button">Quick Load</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="builder-canvas-panel" aria-label="Map canvas">
+          <div class="canvas-toolbar">
+            <div class="status-strip" aria-live="polite">
+              <strong id="activeTool">Select</strong>
+              <span id="cursorPosition">x 0, y 0</span>
+              <span id="objectCount">0 objects</span>
+            </div>
+            <div class="zoom-controls">
+              <button id="fitBtn" type="button">Fit</button>
+              <label class="grid-toggle">
+                <input id="gridToggle" type="checkbox" checked>
+                <span>Grid</span>
+              </label>
+              <label class="grid-toggle">
+                <input id="snapToggle" type="checkbox" checked>
+                <span>Snap</span>
+              </label>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="builderCanvas" width="1280" height="720" aria-label="Editable map canvas"></canvas>
+          </div>
+        </section>
+
+        <details class="builder-panel builder-inspector" aria-label="Inspector and export">
+          <summary class="inspector-summary">Inspector</summary>
+          <div class="panel-section">
+            <p class="section-title">Inspector</p>
+            <div id="inspectorEmpty" class="muted">No selection</div>
+            <div id="inspectorFields" class="inspector-fields" hidden>
+              <label class="field">
+                <span>Type</span>
+                <input id="objectType" type="text" readonly>
+              </label>
+              <div class="field-row">
+                <label class="field">
+                  <span>X</span>
+                  <input id="objectX" type="number" step="1">
+                </label>
+                <label class="field">
+                  <span>Y</span>
+                  <input id="objectY" type="number" step="1">
+                </label>
+              </div>
+              <div class="field-row" id="sizeFields">
+                <label class="field">
+                  <span>W</span>
+                  <input id="objectW" type="number" step="1" min="1">
+                </label>
+                <label class="field">
+                  <span>H</span>
+                  <input id="objectH" type="number" step="1" min="1">
+                </label>
+              </div>
+              <label class="field" id="nameField">
+                <span>Name</span>
+                <input id="objectName" type="text" maxlength="32" autocomplete="off">
+              </label>
+              <label class="field" id="colorField">
+                <span>Color</span>
+                <input id="objectColor" type="color">
+              </label>
+              <label class="field" id="opacityField">
+                <span>Opacity</span>
+                <input id="objectOpacity" type="range" min="0.1" max="1" step="0.05">
+              </label>
+              <label class="field" id="rotationField">
+                <span>Rotation</span>
+                <input id="objectRotation" type="number" step="1">
+              </label>
+              <button id="deleteBtn" class="danger-button" type="button">Delete</button>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Layers</p>
+            <div id="layerList" class="layer-list" aria-label="Map layers"></div>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Readiness</p>
+            <div id="validationSummary" class="validation-summary">Not checked</div>
+            <ul id="validationList" class="validation-list"></ul>
+          </div>
+
+          <div class="panel-section">
+            <p class="section-title">Export</p>
+            <div class="action-grid">
+              <button id="exportGameBtn" type="button">Game JSON</button>
+              <button id="exportTiledBtn" type="button">Tiled JSON</button>
+              <button id="copyBtn" type="button">Copy</button>
+              <button id="downloadBtn" type="button">Download</button>
+            </div>
+            <textarea id="exportOutput" spellcheck="false" aria-label="Exported map JSON"></textarea>
+          </div>
+        </details>
+      </section>
+    </main>
+  </body>
+</html>

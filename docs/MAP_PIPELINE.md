@@ -88,6 +88,14 @@ Use `--force` only when intentionally replacing a draft Tiled source. After crea
 Run:
 
 ```sh
+npm run maps:promote-builder -- incoming/maps/builder-export.tiled.json --id manor-party
+```
+
+This promotes a browser-builder export that has embedded media (data URLs). The script extracts image-layer files into `assets/maps/`, extracts embedded audio properties into `assets/audio/maps/`, rewrites the map media paths to local project-relative assets, and emits production-ready `assets/maps/<id>.tiled.json` and/or `assets/maps/<id>.game-map.json` (use `--format tiled|game|both`). Follow with `npm run maps:validate -- assets/maps/<id>.tiled.json` before packaging.
+
+Run:
+
+```sh
 npm run maps:preview
 ```
 

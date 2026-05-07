@@ -61,7 +61,8 @@
     "network:check": "node scripts/network-protocol-check.mjs",
     "replay:check": "node scripts/replay-link-check.mjs",
     "submission:packet": "npm run localization:kit && npm run config:check && npm run network:protocol && npm run replay:check && node scripts/playtest-feedback-intake.mjs && node scripts/store-capture-plan.mjs && node scripts/submission-packet.mjs",
-    "party:content-punchlist": "node scripts/party-content-punchlist.mjs"
+    "party:content-punchlist": "node scripts/party-content-punchlist.mjs",
+    "maps:promote-builder": "node scripts/promote-browser-builder-map.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

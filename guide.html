@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Afterlight Protocol | Game Guide</title>
-    <link rel="stylesheet" href="styles.css?v=20260502-09">
+    <link rel="stylesheet" href="styles.css?v=20260504-01">
     <style>
       .guide-shell { max-width: 980px; margin: 1.5rem auto; padding: 1rem; color: #eaf2ff; }
       .guide-card { background: rgba(5,10,20,.86); border: 1px solid rgba(130,180,255,.24); border-radius: 14px; padding: 1rem 1.1rem; margin-bottom: .9rem; }
@@ -14,6 +14,9 @@
       .guide-links a { color: #9ed0ff; text-decoration: none; }
       .guide-links a:hover { text-decoration: underline; }
       .guide-top { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+      .guide-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.55rem; }
+      .guide-actions a { display:inline-grid; place-items:center; min-height:42px; padding:0 .9rem; text-decoration:none; border-radius:8px; }
+      @media (max-width: 640px) { .guide-top { align-items:flex-start; flex-direction:column; } .guide-actions { justify-content:flex-start; } }
     </style>
   </head>
   <body>
@@ -24,7 +27,10 @@
           <h1>Game Guide & Technical Overview</h1>
           <p>Quick reference for players, hosts, and builders.</p>
         </div>
-        <a href="/host" class="primary-button">Launch Host</a>
+        <div class="guide-actions">
+          <a href="map-builder.html" class="primary-button">Open Builder</a>
+          <a href="/host" class="primary-button">Launch Host</a>
+        </div>
       </section>
 
       <section class="guide-card">
@@ -91,6 +97,7 @@
           <li><a href="/join">Phone Controller Join Screen</a></li>
           <li><a href="/diagnostics">Room Diagnostics</a></li>
           <li><a href="/rooms">Room API (JSON)</a></li>
+          <li><a href="map-builder.html">Map Builder</a></li>
           <li><a href="assets/maps/manor-party.tiled.json">Map Source (Tiled JSON)</a></li>
           <li><a href="docs/MAP_PIPELINE.md">Map Designer/Builder Workflow</a></li>
           <li><a href="docs/ASSET_PIPELINE.md">Artwork Asset Pipeline</a></li>

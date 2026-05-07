@@ -1,8 +1,8 @@
 import { createReadStream, existsSync } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
-import { extname, join, normalize, resolve } from "node:path";
+import { basename, extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import QRCode from "qrcode";
@@ -10,6 +10,9 @@ import QRCode from "qrcode";
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT ?? 5173);
 const roomTtlMs = 1000 * 60 * 60 * 6;
+const mapMusicDir = resolve(process.env.MAP_MUSIC_DIR ?? (existsSync("/data") ? "/data/map-music" : join(root, "assets", "audio", "maps")));
+const maxMapMusicUploadBytes = 12 * 1024 * 1024;
+const maxMapMusicRequestBytes = Math.ceil(maxMapMusicUploadBytes * 1.4) + 2048;
 const rooms = new Map();
 
 const mimeTypes = {
@@ -47,6 +50,22 @@ const server = createServer(async (req, res) => {
       sendHtml(res, renderDiagnosticsPage([...rooms.values()]));
       return;
     }
+    if (requestUrl.pathname === "/api/map-music" && req.method === "GET") {
+      sendJson(res, await listMapMusic());
+      return;
+    }
+    if (requestUrl.pathname === "/api/map-music" && req.method === "POST") {
+      sendJson(res, await saveMapMusic(req), 201);
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/api/map-music/") && req.method === "DELETE") {
+      sendJson(res, await deleteMapMusic(requestUrl.pathname));
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/assets/audio/maps/") && (req.method === "GET" || req.method === "HEAD")) {
+      await sendMapMusicAsset(requestUrl.pathname, res);
+      return;
+    }
     if (requestUrl.pathname === "/host") {
       await sendFile(res, join(root, "index.html"));
       return;
@@ -58,6 +77,10 @@ const server = createServer(async (req, res) => {
     await sendStatic(requestUrl.pathname, res);
   } catch (error) {
     console.error(error);
+    if (error.status) {
+      sendJson(res, { ok: false, error: error.message }, error.status);
+      return;
+    }
     sendText(res, 500, "Internal server error");
   }
 });
@@ -252,8 +275,8 @@ async function sendFile(res, filePath) {
   createReadStream(filePath).pipe(res);
 }
 
-function sendJson(res, data) {
-  res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+function sendJson(res, data, status = 200) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   res.end(JSON.stringify(data, null, 2));
 }
 
@@ -271,6 +294,124 @@ function getOrigin(req) {
   const proto = req.headers["x-forwarded-proto"] ?? "http";
   const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? `127.0.0.1:${port}`;
   return `${proto}://${host}`;
+}
+
+async function listMapMusic() {
+  await mkdir(mapMusicDir, { recursive: true });
+  const entries = await readdir(mapMusicDir, { withFileTypes: true });
+  const items = await Promise.all(entries
+    .filter((entry) => entry.isFile() && [".mp3", ".ogg", ".wav"].includes(extname(entry.name).toLowerCase()))
+    .map(async (entry) => {
+      const filePath = join(mapMusicDir, entry.name);
+      const info = await stat(filePath);
+      return mapMusicItem(entry.name, info.size, info.mtimeMs);
+    }));
+  return { ok: true, music: items.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+async function saveMapMusic(req) {
+  const payload = await readJsonBody(req, maxMapMusicRequestBytes);
+  const dataUrl = String(payload.dataUrl ?? "");
+  const match = /^data:(audio\/mpeg|audio\/mp3);base64,([a-z0-9+/=\s]+)$/i.exec(dataUrl);
+  if (!match) throw httpError(400, "Upload an MP3 audio file.");
+  const bytes = Buffer.from(match[2].replace(/\s/g, ""), "base64");
+  if (!bytes.length) throw httpError(400, "MP3 upload was empty.");
+  if (bytes.length > maxMapMusicUploadBytes) throw httpError(413, "MP3 upload is larger than 12 MB.");
+  await mkdir(mapMusicDir, { recursive: true });
+  const base = slugifyAudioName(payload.name || "map-music");
+  const filename = await uniqueAudioFilename(`${base}.mp3`);
+  const filePath = join(mapMusicDir, filename);
+  await writeFile(filePath, bytes);
+  const info = await stat(filePath);
+  return { ok: true, music: mapMusicItem(filename, info.size, info.mtimeMs) };
+}
+
+async function deleteMapMusic(pathname) {
+  const filename = basename(decodeURIComponent(pathname.replace(/^\/api\/map-music\//, "")));
+  if (!filename || filename !== sanitizeAudioFilename(filename)) throw httpError(400, "Choose a valid music file.");
+  const filePath = resolveMapMusicFile(filename);
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") throw httpError(404, "Music file not found.");
+    throw error;
+  }
+  return { ok: true, deleted: filename };
+}
+
+async function sendMapMusicAsset(pathname, res) {
+  const filename = basename(decodeURIComponent(pathname.replace(/^\/assets\/audio\/maps\//, "")));
+  if (!filename || filename !== sanitizeAudioFilename(filename)) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+  const filePath = resolveMapMusicFile(filename);
+  if (!existsSync(filePath)) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+  await sendFile(res, filePath);
+}
+
+async function readJsonBody(req, maxBytes) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) throw httpError(413, "Request body is too large.");
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    throw httpError(400, "Request body must be JSON.");
+  }
+}
+
+async function uniqueAudioFilename(preferred) {
+  const safe = sanitizeAudioFilename(preferred);
+  const base = safe.replace(/\.mp3$/i, "");
+  for (let index = 0; index < 1000; index += 1) {
+    const candidate = index ? `${base}-${index + 1}.mp3` : safe;
+    if (!existsSync(join(mapMusicDir, candidate))) return candidate;
+  }
+  return `${base}-${Date.now()}.mp3`;
+}
+
+function resolveMapMusicFile(filename) {
+  const libraryRoot = resolve(mapMusicDir);
+  const filePath = resolve(libraryRoot, filename);
+  if (filePath !== libraryRoot && filePath.startsWith(`${libraryRoot}${sep}`)) return filePath;
+  throw httpError(403, "Music file is outside the library.");
+}
+
+function mapMusicItem(filename, size, mtimeMs) {
+  return {
+    name: filename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+    filename,
+    src: `/assets/audio/maps/${filename}`,
+    mimeType: mimeTypes[extname(filename).toLowerCase()] ?? "audio/mpeg",
+    size,
+    updatedAt: new Date(mtimeMs).toISOString()
+  };
+}
+
+function sanitizeAudioFilename(value) {
+  const name = basename(String(value ?? ""));
+  const ext = extname(name).toLowerCase();
+  if (![".mp3", ".ogg", ".wav"].includes(ext)) return "";
+  const stem = slugifyAudioName(name.slice(0, -ext.length));
+  return `${stem}${ext}`;
+}
+
+function slugifyAudioName(value) {
+  return String(value).toLowerCase().replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "map-music";
+}
+
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
 }
 
 function getSocketOrigin(socket) {
