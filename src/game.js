@@ -3919,14 +3919,15 @@ function drawOcclusionOverlays() {
     }
     if (mapForegroundImage?.src) {
       drawMaskedOcclusionOverlay(occluder, source, mapForegroundImage);
-      continue;
+    } else {
+      ctx.save();
+      clipOccluder(ctx, occluder);
+      drawMapImage(source);
+      drawLightingWashes();
+      drawAmbientDarkness();
+      ctx.restore();
     }
-    ctx.save();
-    clipOccluder(ctx, occluder);
-    drawMapImage(source);
-    drawLightingWashes();
-    drawAmbientDarkness();
-    ctx.restore();
+    redrawActorsInFrontOfOccluder(actors, occluder);
   }
 }
 
@@ -3953,6 +3954,35 @@ function drawMaskedOcclusionOverlay(occluder, source, alphaMask) {
   targetCtx.restore();
 
   ctx.drawImage(occlusionCanvas, 0, 0);
+}
+
+function redrawActorsInFrontOfOccluder(actors, occluder) {
+  const bounds = occluderBounds(occluder);
+  const frontActors = actors.filter((actor) => (
+    !actorBehindOccluder(actor, occluder)
+    && boundsOverlap(getActorVisualBounds(actor), bounds)
+  ));
+  if (!frontActors.length) {
+    return;
+  }
+  ctx.save();
+  clipOccluder(ctx, occluder);
+  for (const actor of frontActors) {
+    drawActorForOcclusion(actor);
+  }
+  ctx.restore();
+}
+
+function drawActorForOcclusion(actor) {
+  if (typeof actor?.resolve === "number" && typeof actor?.battery === "number") {
+    drawInvestigator(actor);
+    return;
+  }
+  if (actor === state.anomaly) {
+    drawAnomaly(actor);
+    return;
+  }
+  drawEcho(actor);
 }
 
 function getOcclusionOverlayContext() {
@@ -4067,35 +4097,39 @@ function boundsOverlap(a, b) {
 
 function drawEchoes() {
   for (const echo of state.echoes) {
-    const life = clamp(echo.life / echoMaxLife, 0, 1);
-    const alpha = playerRole === "Anomaly" ? 0.48 : 0.16 + life * 0.12;
-    const pulse = Math.sin(echo.pulse) * 5;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(echo.x, echo.y);
-    ctx.rotate(echo.pulse * 0.14);
-    ctx.shadowColor = "#e76f8a";
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = "#e76f8a";
-    ctx.fillStyle = "rgba(231, 111, 138, 0.18)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < 8; i += 1) {
-      const a = (i / 8) * Math.PI * 2;
-      const r = echo.radius + pulse + (i % 2) * 9;
-      const x = Math.cos(a) * r;
-      const y = Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
+    drawEcho(echo);
+  }
+}
 
-    if (playerRole === "Anomaly") {
-      drawNameplate(echo.x, echo.y - 34, "ECHO", `${Math.ceil(echo.life)}s`, "#e76f8a");
-    }
+function drawEcho(echo) {
+  const life = clamp(echo.life / echoMaxLife, 0, 1);
+  const alpha = playerRole === "Anomaly" ? 0.48 : 0.16 + life * 0.12;
+  const pulse = Math.sin(echo.pulse) * 5;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(echo.x, echo.y);
+  ctx.rotate(echo.pulse * 0.14);
+  ctx.shadowColor = "#e76f8a";
+  ctx.shadowBlur = 18;
+  ctx.strokeStyle = "#e76f8a";
+  ctx.fillStyle = "rgba(231, 111, 138, 0.18)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i += 1) {
+    const a = (i / 8) * Math.PI * 2;
+    const r = echo.radius + pulse + (i % 2) * 9;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  if (playerRole === "Anomaly") {
+    drawNameplate(echo.x, echo.y - 34, "ECHO", `${Math.ceil(echo.life)}s`, "#e76f8a");
   }
 }
 
