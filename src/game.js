@@ -2796,6 +2796,7 @@ function draw() {
   drawRings();
   drawEchoes();
   drawAgents();
+  drawForegroundLayer();
   drawOcclusionOverlays();
   drawObjectiveHints();
   drawParticles();
@@ -3789,6 +3790,10 @@ function drawAgents() {
     drawInvestigator(agent);
   }
   drawAnomaly(state.anomaly);
+}
+
+function drawForegroundLayer() {
+  drawMapImage(mapForegroundImage);
 }
 
 function drawOcclusionOverlays() {

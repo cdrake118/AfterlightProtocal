@@ -111,6 +111,8 @@ const foregroundFile = document.querySelector("#foregroundFile");
 const decorationFile = document.querySelector("#decorationFile");
 const musicFile = document.querySelector("#musicFile");
 const mediaStatus = document.querySelector("#mediaStatus");
+const floorImageStatus = document.querySelector("#floorImageStatus");
+const foregroundImageStatus = document.querySelector("#foregroundImageStatus");
 const musicStatus = document.querySelector("#musicStatus");
 const musicLibrarySelect = document.querySelector("#musicLibrarySelect");
 const mapMusicVolume = document.querySelector("#mapMusicVolume");
@@ -200,6 +202,8 @@ function wireControls() {
   document.querySelector("#musicBtn").addEventListener("click", () => musicFile.click());
   document.querySelector("#selectBackgroundBtn").addEventListener("click", selectBackground);
   document.querySelector("#selectForegroundBtn").addEventListener("click", selectForeground);
+  floorImageStatus.addEventListener("click", selectBackground);
+  foregroundImageStatus.addEventListener("click", selectForeground);
   document.querySelector("#clearBackgroundBtn").addEventListener("click", clearBackground);
   document.querySelector("#clearForegroundBtn").addEventListener("click", clearForeground);
   document.querySelector("#clearMusicBtn").addEventListener("click", clearMusic);
@@ -667,12 +671,21 @@ function musicFromLibraryItem(item) {
 }
 
 function updateMediaStatus() {
+  updateImageStatus(floorImageStatus, map.backgroundImage, "Floor");
+  updateImageStatus(foregroundImageStatus, map.foregroundImage, "Foreground");
   const volume = clamp(Number(map.music?.volume ?? 1), 0, 1);
   mapMusicVolume.value = String(volume);
   musicVolumeValue.textContent = `${Math.round(volume * 100)}%`;
   musicVolumeField.classList.toggle("is-disabled", !map.music);
   mapMusicVolume.disabled = !map.music;
   musicStatus.textContent = map.music ? `Music: ${map.music.name}` : "No map music loaded";
+}
+
+function updateImageStatus(element, image, label) {
+  if (!element) return;
+  element.classList.toggle("has-image", Boolean(image?.src));
+  element.style.backgroundImage = image?.src ? `linear-gradient(rgba(3, 7, 11, 0.28), rgba(3, 7, 11, 0.78)), url("${image.src}")` : "";
+  element.textContent = image?.src ? `${label}: ${image.name || "image"}` : `${label}: none`;
 }
 
 function preloadImage(src) {
@@ -1843,6 +1856,7 @@ function validateMap() {
 }
 
 function changed(runValidation = true, recordHistory = true) {
+  updateMediaStatus();
   updateExport();
   if (runValidation) validateMap();
   renderLayerList();
