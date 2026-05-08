@@ -137,6 +137,7 @@ const missingAudioAssets = new Set();
 let currentMusicSource = null;
 let currentMusicGain = null;
 let currentMusicTrackSrc = "";
+let currentMusicRequestId = 0;
 let requestedMusicTrackSrc = "";
 const audioVolumes = {
   master: 0.9,
@@ -6785,22 +6786,24 @@ function startMapMusic() {
     stopMapMusic();
     return;
   }
+  const trackVolume = getMapMusicVolume(track);
   if (currentMusicSource && currentMusicTrackSrc === src) {
-    currentMusicGain?.gain.setTargetAtTime(clamp(Number(track.volume ?? 1), 0, 1), audioContext.currentTime, 0.025);
+    currentMusicGain?.gain.setTargetAtTime(trackVolume, audioContext.currentTime, 0.025);
     return;
   }
   stopMapMusic();
+  const requestId = ++currentMusicRequestId;
   requestedMusicTrackSrc = src;
   getDecodedAudioBuffer(src)
     .then((buffer) => {
-      if (!soundEnabled || state.phase !== "playing" || requestedMusicTrackSrc !== src) {
+      if (!soundEnabled || state.phase !== "playing" || requestedMusicTrackSrc !== src || currentMusicRequestId !== requestId) {
         return;
       }
       const source = audioContext.createBufferSource();
       const gain = audioContext.createGain();
       source.buffer = buffer;
       source.loop = track.loop !== false;
-      gain.gain.setValueAtTime(clamp(Number(track.volume ?? 1), 0, 1), audioContext.currentTime);
+      gain.gain.setValueAtTime(trackVolume, audioContext.currentTime);
       source.connect(gain).connect(getAudioDestination("music"));
       source.start();
       currentMusicSource = source;
@@ -6815,6 +6818,7 @@ function startMapMusic() {
 }
 
 function stopMapMusic() {
+  currentMusicRequestId += 1;
   requestedMusicTrackSrc = "";
   if (currentMusicSource) {
     try {
@@ -6828,6 +6832,15 @@ function stopMapMusic() {
   currentMusicSource = null;
   currentMusicGain = null;
   currentMusicTrackSrc = "";
+}
+
+function getMapMusicVolume(track) {
+  const raw = Number.parseFloat(track?.volume ?? 1);
+  if (!Number.isFinite(raw)) {
+    return 1;
+  }
+  const normalized = raw > 1 && raw <= 100 ? raw / 100 : raw;
+  return clamp(normalized, 0, 1);
 }
 
 function getDecodedAudioBuffer(src) {
