@@ -2796,7 +2796,6 @@ function draw() {
   drawRings();
   drawEchoes();
   drawAgents();
-  drawForegroundLayer();
   drawOcclusionOverlays();
   drawObjectiveHints();
   drawParticles();
@@ -2872,6 +2871,7 @@ function drawWorld() {
     drawRect(prop, prop.color, "#10151a", "prop");
     drawPropDetails(prop);
   }
+  drawMapImage(mapForegroundImage);
 
   for (const [x, y, label] of roomLabels) {
     drawRoomLabel(x, y, label);
@@ -3790,10 +3790,6 @@ function drawAgents() {
     drawInvestigator(agent);
   }
   drawAnomaly(state.anomaly);
-}
-
-function drawForegroundLayer() {
-  drawMapImage(mapForegroundImage);
 }
 
 function drawOcclusionOverlays() {
