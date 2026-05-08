@@ -323,6 +323,37 @@ textarea {
   font-size: 11px;
 }
 
+.cover-line-field {
+  padding: 10px;
+  border: 1px solid rgba(199, 168, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(199, 168, 255, 0.07);
+}
+
+.secondary-action {
+  justify-content: center;
+  border-color: rgba(199, 168, 255, 0.42);
+  color: #fff4cf;
+}
+
+.fine-tune-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.fine-tune-controls summary {
+  cursor: pointer;
+  color: #dff7ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.fine-tune-controls[open] {
+  padding-top: 2px;
+}
+
 .check-field {
   display: flex;
   align-items: center;

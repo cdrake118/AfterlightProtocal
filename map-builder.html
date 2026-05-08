@@ -229,25 +229,29 @@
                   <input id="objectH" type="number" step="1" min="1">
                 </label>
               </div>
-              <label class="field" id="depthField">
-                <span>Front Edge <strong id="frontEdgeValue">0</strong></span>
-                <input id="objectDepthY" type="number" step="1">
-                <input id="objectDepthYRange" type="range" min="0" max="100" step="1">
-                <div class="front-edge-controls">
-                  <button type="button" data-front-edge="barrier">Use Barrier Edge</button>
-                </div>
-                <div class="front-edge-controls">
-                  <button type="button" data-front-edge="top">Top</button>
-                  <button type="button" data-front-edge="middle">Middle</button>
-                  <button type="button" data-front-edge="bottom">Bottom</button>
-                </div>
-                <div class="front-edge-controls">
-                  <button type="button" data-front-edge-nudge="-8">-8</button>
-                  <button type="button" data-front-edge-nudge="-1">-1</button>
-                  <button type="button" data-front-edge-nudge="1">+1</button>
-                  <button type="button" data-front-edge-nudge="8">+8</button>
-                </div>
-              </label>
+              <div class="field cover-line-field" id="depthField">
+                <span>Cover Line <strong id="frontEdgeValue">0</strong></span>
+                <button class="secondary-action" type="button" data-front-edge="barrier">Match Barrier</button>
+                <details class="fine-tune-controls">
+                  <summary>Fine tune</summary>
+                  <label class="field">
+                    <span>Y position</span>
+                    <input id="objectDepthY" type="number" step="1">
+                  </label>
+                  <input id="objectDepthYRange" type="range" min="0" max="100" step="1" aria-label="Cover line Y position">
+                  <div class="front-edge-controls">
+                    <button type="button" data-front-edge="top">Top</button>
+                    <button type="button" data-front-edge="middle">Middle</button>
+                    <button type="button" data-front-edge="bottom">Bottom</button>
+                  </div>
+                  <div class="front-edge-controls">
+                    <button type="button" data-front-edge-nudge="-8">-8</button>
+                    <button type="button" data-front-edge-nudge="-1">-1</button>
+                    <button type="button" data-front-edge-nudge="1">+1</button>
+                    <button type="button" data-front-edge-nudge="8">+8</button>
+                  </div>
+                </details>
+              </div>
               <label class="field" id="nameField">
                 <span>Name</span>
                 <input id="objectName" type="text" maxlength="32" autocomplete="off">

@@ -864,16 +864,25 @@ function handlePointerUp() {
         : pointer.kind === "occluder"
           ? map.occluders
           : map.walls;
-      const object = pointer.kind === "prop"
+      let barrierCoverLineMatch = null;
+      let object = pointer.kind === "prop"
         ? { ...rect, color: "#26323a" }
         : pointer.kind === "occluder"
           ? normalizeOccluder({ ...rect, name: `Occluder ${map.occluders.length + 1}` })
           : { ...rect, visible: pointer.kind !== "barrier" };
+      if (pointer.kind === "occluder") {
+        barrierCoverLineMatch = bestBarrierEdgeForOccluder(object);
+        if (barrierCoverLineMatch) {
+          object = normalizeOccluder({ ...object, depthY: barrierCoverLineMatch.depthY });
+        }
+      }
       target.push(object);
       setSelection({ kind: pointer.kind === "barrier" ? "wall" : pointer.kind, index: target.length - 1 });
       changed(true, true);
       if (pointer.kind === "occluder") {
-        markStatus("Occluder added. Drag Front Edge or tune it in Inspector");
+        markStatus(barrierCoverLineMatch
+          ? `Occluder added. Cover Line matched ${barrierCoverLineMatch.label}`
+          : "Occluder added. Drag Cover Line or use Match Barrier");
       }
     }
   }
@@ -1502,7 +1511,7 @@ function setSelectedOccluderFrontEdge(position) {
     bottom: occluder.y + occluder.h
   };
   setOccluderFrontEdge(values[position] ?? values.middle);
-  markStatus(`Front Edge set to ${titleCase(position)}`);
+  markStatus(`Cover Line set to ${titleCase(position)}`);
 }
 
 function setSelectedOccluderFrontEdgeFromBarrier(occluder) {
@@ -1512,7 +1521,7 @@ function setSelectedOccluderFrontEdgeFromBarrier(occluder) {
     return;
   }
   setOccluderFrontEdge(match.depthY);
-  markStatus(`Front Edge matched ${match.label}`);
+  markStatus(`Cover Line matched ${match.label}`);
 }
 
 function bestBarrierEdgeForOccluder(occluder) {
@@ -1571,7 +1580,7 @@ function nudgeSelectedOccluderFrontEdge(delta) {
   const occluder = selected?.kind === "occluder" ? readSelection(selected) : null;
   if (!occluder || isSegmentWall(occluder) || !Number.isFinite(delta)) return;
   setOccluderFrontEdge((occluder.depthY ?? occluder.y + occluder.h) + delta);
-  markStatus(`Front Edge nudged ${delta > 0 ? "+" : ""}${delta}`);
+  markStatus(`Cover Line nudged ${delta > 0 ? "+" : ""}${delta}`);
 }
 
 function setOccluderFrontEdge(depthY) {
@@ -1859,11 +1868,11 @@ function drawOccluder(occluder, selectedState) {
   ctx.fillStyle = "#f8fbfd";
   ctx.font = "900 10px Inter, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(selectedState ? "FRONT EDGE" : "OCCLUDER", occluder.x + occluder.w / 2, Math.max(occluder.y + 14, depthY - 7));
+  ctx.fillText(selectedState ? "COVER LINE" : "OCCLUDER", occluder.x + occluder.w / 2, Math.max(occluder.y + 14, depthY - 7));
   if (selectedState && occluder.h >= 52) {
     ctx.fillStyle = "rgba(248,251,253,0.72)";
     ctx.font = "800 9px Inter, sans-serif";
-    if (depthY - occluder.y > 22) ctx.fillText("COVERED", occluder.x + occluder.w / 2, occluder.y + 16);
+    if (depthY - occluder.y > 22) ctx.fillText("BEHIND", occluder.x + occluder.w / 2, occluder.y + 16);
     if (occluder.y + occluder.h - depthY > 22) ctx.fillText("IN FRONT", occluder.x + occluder.w / 2, occluder.y + occluder.h - 10);
   }
   ctx.restore();
