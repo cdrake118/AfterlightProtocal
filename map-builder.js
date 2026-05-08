@@ -13,6 +13,7 @@ const resizeIntentRatio = 1.35;
 const occluderDepthHitPadding = 28;
 const defaultWallThickness = 24;
 const defaultBarrierThickness = 1;
+const barrierCollisionPadding = 10;
 const defaultOccluderThickness = 96;
 const wallAnchorHitRadius = 18;
 const storageFloorImageMax = { width: 1280, height: 720, quality: 0.86 };
@@ -1316,8 +1317,9 @@ function resolveActorCircleObstacle(circle, obstacle) {
 }
 
 function resolveActorCircleRect(circle, rect) {
-  const cx = clamp(circle.x, rect.x, rect.x + rect.w);
-  const cy = clamp(circle.y, rect.y, rect.y + rect.h);
+  const bounds = collisionBoundsForObstacle(rect);
+  const cx = clamp(circle.x, bounds.x, bounds.x + bounds.w);
+  const cy = clamp(circle.y, bounds.y, bounds.y + bounds.h);
   const dx = circle.x - cx;
   const dy = circle.y - cy;
   const dist = Math.hypot(dx, dy);
@@ -1327,12 +1329,12 @@ function resolveActorCircleRect(circle, rect) {
     circle.y += (dy / dist) * push;
     return;
   }
-  if (dist === 0 && pointInRect(circle, rect)) {
+  if (dist === 0 && pointInRect(circle, bounds)) {
     const pushes = [
-      { dx: rect.x - circle.x - circle.radius, dy: 0, distance: Math.abs(circle.x - rect.x) },
-      { dx: rect.x + rect.w - circle.x + circle.radius, dy: 0, distance: Math.abs(rect.x + rect.w - circle.x) },
-      { dx: 0, dy: rect.y - circle.y - circle.radius, distance: Math.abs(circle.y - rect.y) },
-      { dx: 0, dy: rect.y + rect.h - circle.y + circle.radius, distance: Math.abs(rect.y + rect.h - circle.y) }
+      { dx: bounds.x - circle.x - circle.radius, dy: 0, distance: Math.abs(circle.x - bounds.x) },
+      { dx: bounds.x + bounds.w - circle.x + circle.radius, dy: 0, distance: Math.abs(bounds.x + bounds.w - circle.x) },
+      { dx: 0, dy: bounds.y - circle.y - circle.radius, distance: Math.abs(circle.y - bounds.y) },
+      { dx: 0, dy: bounds.y + bounds.h - circle.y + circle.radius, distance: Math.abs(bounds.y + bounds.h - circle.y) }
     ].sort((a, b) => a.distance - b.distance);
     circle.x += pushes[0].dx;
     circle.y += pushes[0].dy;
@@ -1344,7 +1346,7 @@ function resolveActorCircleSegment(circle, segment) {
   const dx = circle.x - closest.x;
   const dy = circle.y - closest.y;
   const dist = Math.hypot(dx, dy);
-  const minDist = circle.radius + wallThickness(segment) / 2;
+  const minDist = circle.radius + wallCollisionThickness(segment) / 2;
   if (dist > 0 && dist < minDist) {
     const push = minDist - dist;
     circle.x += (dx / dist) * push;
@@ -1354,6 +1356,19 @@ function resolveActorCircleSegment(circle, segment) {
     circle.x += Math.cos(angle) * minDist;
     circle.y += Math.sin(angle) * minDist;
   }
+}
+
+function collisionBoundsForObstacle(obstacle) {
+  if (obstacle?.visible !== false || isSegmentWall(obstacle)) {
+    return obstacle;
+  }
+  return {
+    ...obstacle,
+    x: obstacle.x - barrierCollisionPadding,
+    y: obstacle.y - barrierCollisionPadding,
+    w: obstacle.w + barrierCollisionPadding * 2,
+    h: obstacle.h + barrierCollisionPadding * 2
+  };
 }
 
 function nudgeSelection(event) {
@@ -3151,6 +3166,10 @@ function wallThickness(wall) {
   return Number.isFinite(thickness) ? thickness : fallback;
 }
 
+function wallCollisionThickness(wall) {
+  return wallThickness(wall) + (wall?.visible === false ? barrierCollisionPadding * 2 : 0);
+}
+
 function occluderThickness(occluder) {
   const thickness = Number(occluder?.thickness ?? defaultOccluderThickness);
   return Number.isFinite(thickness) ? thickness : defaultOccluderThickness;
@@ -3779,8 +3798,8 @@ function pointInOccluder(point, occluder) {
 
 function pointInBlocker(point, blocker) {
   return isSegmentWall(blocker)
-    ? distancePointToSegment(point.x, point.y, blocker.x, blocker.y, blocker.x2, blocker.y2) <= wallThickness(blocker) / 2
-    : pointInRect(point, blocker);
+    ? distancePointToSegment(point.x, point.y, blocker.x, blocker.y, blocker.x2, blocker.y2) <= wallCollisionThickness(blocker) / 2
+    : pointInRect(point, collisionBoundsForObstacle(blocker));
 }
 
 function pointObjectInBounds(point) {

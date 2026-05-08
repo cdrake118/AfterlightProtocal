@@ -249,6 +249,7 @@ const aiProbeMinCooldown = GameBalance.ai.probeMinCooldownSeconds;
 const aiProbeMaxCooldown = GameBalance.ai.probeMaxCooldownSeconds;
 const characterSpriteSize = 128;
 const anomalyVisualScale = 0.78;
+const barrierCollisionPadding = 10;
 const investigatorVisual = {
   width: 48,
   height: 78,
@@ -2654,8 +2655,9 @@ function resolveCircleObstacle(circle, obstacle) {
 }
 
 function resolveCircleRect(circle, rect) {
-  const cx = clamp(circle.x, rect.x, rect.x + rect.w);
-  const cy = clamp(circle.y, rect.y, rect.y + rect.h);
+  const bounds = collisionBoundsForObstacle(rect);
+  const cx = clamp(circle.x, bounds.x, bounds.x + bounds.w);
+  const cy = clamp(circle.y, bounds.y, bounds.y + bounds.h);
   const dx = circle.x - cx;
   const dy = circle.y - cy;
   const dist = Math.hypot(dx, dy);
@@ -2663,6 +2665,17 @@ function resolveCircleRect(circle, rect) {
     const push = circle.radius - dist;
     circle.x += (dx / dist) * push;
     circle.y += (dy / dist) * push;
+    return;
+  }
+  if (dist === 0 && pointInRect(circle.x, circle.y, bounds)) {
+    const pushes = [
+      { dx: bounds.x - circle.x - circle.radius, dy: 0, distance: Math.abs(circle.x - bounds.x) },
+      { dx: bounds.x + bounds.w - circle.x + circle.radius, dy: 0, distance: Math.abs(bounds.x + bounds.w - circle.x) },
+      { dx: 0, dy: bounds.y - circle.y - circle.radius, distance: Math.abs(circle.y - bounds.y) },
+      { dx: 0, dy: bounds.y + bounds.h - circle.y + circle.radius, distance: Math.abs(bounds.y + bounds.h - circle.y) }
+    ].sort((a, b) => a.distance - b.distance);
+    circle.x += pushes[0].dx;
+    circle.y += pushes[0].dy;
   }
 }
 
@@ -2671,7 +2684,7 @@ function resolveCircleSegment(circle, segment) {
   const dx = circle.x - closest.x;
   const dy = circle.y - closest.y;
   const dist = Math.hypot(dx, dy);
-  const minDist = circle.radius + wallThickness(segment) / 2;
+  const minDist = circle.radius + wallCollisionThickness(segment) / 2;
   if (dist > 0 && dist < minDist) {
     const push = minDist - dist;
     circle.x += (dx / dist) * push;
@@ -2681,6 +2694,19 @@ function resolveCircleSegment(circle, segment) {
     circle.x += Math.cos(angle) * minDist;
     circle.y += Math.sin(angle) * minDist;
   }
+}
+
+function collisionBoundsForObstacle(obstacle) {
+  if (obstacle?.visible !== false || isSegmentWall(obstacle)) {
+    return obstacle;
+  }
+  return {
+    ...obstacle,
+    x: obstacle.x - barrierCollisionPadding,
+    y: obstacle.y - barrierCollisionPadding,
+    w: obstacle.w + barrierCollisionPadding * 2,
+    h: obstacle.h + barrierCollisionPadding * 2
+  };
 }
 
 function getInvestigatorFlashlightOrigin(agent) {
@@ -2758,17 +2784,18 @@ function pointInRect(x, y, rect) {
 
 function pointInObstacle(x, y, obstacle) {
   if (!isSegmentWall(obstacle)) {
-    return pointInRect(x, y, obstacle);
+    return pointInRect(x, y, collisionBoundsForObstacle(obstacle));
   }
-  return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= wallThickness(obstacle) / 2;
+  return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= wallCollisionThickness(obstacle) / 2;
 }
 
 function pointNearObstacle(x, y, radius, obstacle) {
   if (isSegmentWall(obstacle)) {
-    return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= radius + wallThickness(obstacle) / 2;
+    return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= radius + wallCollisionThickness(obstacle) / 2;
   }
-  const closestX = clamp(x, obstacle.x, obstacle.x + obstacle.w);
-  const closestY = clamp(y, obstacle.y, obstacle.y + obstacle.h);
+  const bounds = collisionBoundsForObstacle(obstacle);
+  const closestX = clamp(x, bounds.x, bounds.x + bounds.w);
+  const closestY = clamp(y, bounds.y, bounds.y + bounds.h);
   return Math.hypot(x - closestX, y - closestY) <= radius;
 }
 
@@ -2781,6 +2808,10 @@ function wallThickness(obstacle) {
   const fallback = obstacle?.visible === false ? 1 : 24;
   const thickness = Number(obstacle?.thickness ?? fallback);
   return Number.isFinite(thickness) ? thickness : fallback;
+}
+
+function wallCollisionThickness(obstacle) {
+  return wallThickness(obstacle) + (obstacle?.visible === false ? barrierCollisionPadding * 2 : 0);
 }
 
 function closestPointOnSegment(px, py, x1, y1, x2, y2) {
