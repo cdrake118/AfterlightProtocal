@@ -615,6 +615,8 @@ let roomLabels = [];
 let floorColors = maps[currentMapName].floor;
 const floorPatterns = new Map();
 const mapImageCache = new Map();
+let occlusionCanvas = null;
+let occlusionCtx = null;
 
 const state = {
   phase: "lobby",
@@ -2947,6 +2949,10 @@ function drawFloorMaterialTexture() {
 }
 
 function drawMapImage(imageRect) {
+  drawMapImageTo(ctx, imageRect);
+}
+
+function drawMapImageTo(targetCtx, imageRect, options = {}) {
   if (!imageRect?.src) {
     return;
   }
@@ -2954,17 +2960,17 @@ function drawMapImage(imageRect) {
   if (!image?.complete || !image.naturalWidth) {
     return;
   }
-  ctx.save();
+  targetCtx.save();
   const width = imageRect.w ?? image.naturalWidth;
   const height = imageRect.h ?? image.naturalHeight;
   const x = imageRect.x ?? 0;
   const y = imageRect.y ?? 0;
   const rotation = ((imageRect.rotation ?? 0) * Math.PI) / 180;
-  ctx.translate(x + width / 2, y + height / 2);
-  ctx.rotate(rotation);
-  ctx.globalAlpha = Number.isFinite(imageRect.opacity) ? imageRect.opacity : 1;
-  ctx.drawImage(image, -width / 2, -height / 2, width, height);
-  ctx.restore();
+  targetCtx.translate(x + width / 2, y + height / 2);
+  targetCtx.rotate(rotation);
+  targetCtx.globalAlpha = options.forceAlpha ?? (Number.isFinite(imageRect.opacity) ? imageRect.opacity : 1);
+  targetCtx.drawImage(image, -width / 2, -height / 2, width, height);
+  targetCtx.restore();
 }
 
 function getMapImage(src) {
@@ -3544,8 +3550,8 @@ function drawLighting() {
   drawAmbientDarkness();
 }
 
-function drawLightingWashes() {
-  ctx.save();
+function drawLightingWashes(targetCtx = ctx) {
+  targetCtx.save();
   for (const agent of getInvestigators()) {
     if (!agent.lightOn || agent.resolve <= 0) {
       continue;
@@ -3554,35 +3560,35 @@ function drawLightingWashes() {
     if (range <= 0) {
       continue;
     }
-    drawFlashlightIllumination(agent, range);
+    drawFlashlightIllumination(agent, range, targetCtx);
   }
   if (lightning > 0) {
-    ctx.globalAlpha = lightning * 0.42;
-    ctx.fillStyle = arenaFlashColor;
-    ctx.fillRect(0, 0, world.width, world.height);
+    targetCtx.globalAlpha = lightning * 0.42;
+    targetCtx.fillStyle = arenaFlashColor;
+    targetCtx.fillRect(0, 0, world.width, world.height);
   }
   if (state.blackout > 0 && playerRole === "Anomaly") {
-    ctx.globalAlpha = Math.min(0.34, state.blackout * 0.12);
-    ctx.fillStyle = "#e76f8a";
-    ctx.fillRect(0, 0, world.width, world.height);
+    targetCtx.globalAlpha = Math.min(0.34, state.blackout * 0.12);
+    targetCtx.fillStyle = "#e76f8a";
+    targetCtx.fillRect(0, 0, world.width, world.height);
   }
   if (abilityFlash > 0) {
-    ctx.globalAlpha = Math.min(0.32, abilityFlash * 1.1);
-    ctx.fillStyle = playerRole === "Anomaly" ? "#e76f8a" : "#dff7ff";
-    ctx.fillRect(0, 0, world.width, world.height);
+    targetCtx.globalAlpha = Math.min(0.32, abilityFlash * 1.1);
+    targetCtx.fillStyle = playerRole === "Anomaly" ? "#e76f8a" : "#dff7ff";
+    targetCtx.fillRect(0, 0, world.width, world.height);
   }
-  ctx.restore();
+  targetCtx.restore();
 }
 
-function drawAmbientDarkness() {
-  ctx.save();
-  ctx.globalCompositeOperation = "multiply";
-  ctx.fillStyle = state.blackout > 0 && playerRole === "Anomaly" ? "rgba(0, 0, 0, 0.48)" : "rgba(0, 0, 0, 0.34)";
-  ctx.fillRect(0, 0, world.width, world.height);
-  ctx.restore();
+function drawAmbientDarkness(targetCtx = ctx) {
+  targetCtx.save();
+  targetCtx.globalCompositeOperation = "multiply";
+  targetCtx.fillStyle = state.blackout > 0 && playerRole === "Anomaly" ? "rgba(0, 0, 0, 0.48)" : "rgba(0, 0, 0, 0.34)";
+  targetCtx.fillRect(0, 0, world.width, world.height);
+  targetCtx.restore();
 }
 
-function drawFlashlightIllumination(agent, range) {
+function drawFlashlightIllumination(agent, range, targetCtx = ctx) {
   const spread = GameBalance.tracker.flashlightBeamAngleRadians;
   const origin = getInvestigatorFlashlightOrigin(agent);
   const points = getFlashlightRayPoints(agent, origin, range, spread * 1.18);
@@ -3594,68 +3600,68 @@ function drawFlashlightIllumination(agent, range) {
   const focusY = centerHit.y;
   const focusDistance = distance(origin, centerHit);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(origin.x, origin.y);
+  targetCtx.save();
+  targetCtx.beginPath();
+  targetCtx.moveTo(origin.x, origin.y);
   for (const point of points) {
-    ctx.lineTo(point.x, point.y);
+    targetCtx.lineTo(point.x, point.y);
   }
-  ctx.closePath();
-  ctx.clip();
+  targetCtx.closePath();
+  targetCtx.clip();
 
-  ctx.globalCompositeOperation = "screen";
-  const spill = ctx.createRadialGradient(origin.x, origin.y, 12, origin.x, origin.y, range);
+  targetCtx.globalCompositeOperation = "screen";
+  const spill = targetCtx.createRadialGradient(origin.x, origin.y, 12, origin.x, origin.y, range);
   spill.addColorStop(0, "rgba(255, 250, 232, 0.44)");
   spill.addColorStop(0.22, "rgba(255, 238, 192, 0.26)");
   spill.addColorStop(0.58, "rgba(183, 229, 219, 0.13)");
   spill.addColorStop(1, "rgba(122, 228, 214, 0)");
-  ctx.fillStyle = spill;
-  ctx.fillRect(origin.x - range, origin.y - range, range * 2, range * 2);
+  targetCtx.fillStyle = spill;
+  targetCtx.fillRect(origin.x - range, origin.y - range, range * 2, range * 2);
 
-  ctx.globalCompositeOperation = "overlay";
-  ctx.globalAlpha = 0.28;
-  const wash = ctx.createRadialGradient(focusX, focusY, 4, focusX, focusY, Math.max(70, range * 0.36));
+  targetCtx.globalCompositeOperation = "overlay";
+  targetCtx.globalAlpha = 0.28;
+  const wash = targetCtx.createRadialGradient(focusX, focusY, 4, focusX, focusY, Math.max(70, range * 0.36));
   wash.addColorStop(0, "rgba(255, 242, 198, 0.72)");
   wash.addColorStop(0.48, "rgba(255, 223, 150, 0.28)");
   wash.addColorStop(1, "rgba(255, 223, 150, 0)");
-  ctx.fillStyle = wash;
-  ctx.beginPath();
-  ctx.arc(focusX, focusY, Math.max(70, range * 0.36), 0, Math.PI * 2);
-  ctx.fill();
+  targetCtx.fillStyle = wash;
+  targetCtx.beginPath();
+  targetCtx.arc(focusX, focusY, Math.max(70, range * 0.36), 0, Math.PI * 2);
+  targetCtx.fill();
 
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = "rgba(255, 250, 226, 0.36)";
-  ctx.lineWidth = Math.max(16, 34 * (focusDistance / Math.max(range, 1)));
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(origin.x + Math.cos(agent.aim) * 8, origin.y + Math.sin(agent.aim) * 8);
-  ctx.lineTo(focusX, focusY);
-  ctx.stroke();
+  targetCtx.globalCompositeOperation = "screen";
+  targetCtx.globalAlpha = 0.5;
+  targetCtx.strokeStyle = "rgba(255, 250, 226, 0.36)";
+  targetCtx.lineWidth = Math.max(16, 34 * (focusDistance / Math.max(range, 1)));
+  targetCtx.lineCap = "round";
+  targetCtx.beginPath();
+  targetCtx.moveTo(origin.x + Math.cos(agent.aim) * 8, origin.y + Math.sin(agent.aim) * 8);
+  targetCtx.lineTo(focusX, focusY);
+  targetCtx.stroke();
 
-  ctx.globalAlpha = 0.34;
-  const hotspot = ctx.createRadialGradient(focusX, focusY, 0, focusX, focusY, 58);
+  targetCtx.globalAlpha = 0.34;
+  const hotspot = targetCtx.createRadialGradient(focusX, focusY, 0, focusX, focusY, 58);
   hotspot.addColorStop(0, "rgba(255, 252, 230, 0.82)");
   hotspot.addColorStop(0.42, "rgba(255, 236, 184, 0.34)");
   hotspot.addColorStop(1, "rgba(255, 236, 184, 0)");
-  ctx.fillStyle = hotspot;
-  ctx.beginPath();
-  ctx.arc(focusX, focusY, 58, 0, Math.PI * 2);
-  ctx.fill();
+  targetCtx.fillStyle = hotspot;
+  targetCtx.beginPath();
+  targetCtx.arc(focusX, focusY, 58, 0, Math.PI * 2);
+  targetCtx.fill();
 
-  ctx.restore();
+  targetCtx.restore();
 
-  ctx.save();
-  ctx.globalCompositeOperation = "screen";
-  const bulb = ctx.createRadialGradient(origin.x, origin.y, 0, origin.x, origin.y, 72);
+  targetCtx.save();
+  targetCtx.globalCompositeOperation = "screen";
+  const bulb = targetCtx.createRadialGradient(origin.x, origin.y, 0, origin.x, origin.y, 72);
   bulb.addColorStop(0, "rgba(255, 250, 232, 0.34)");
   bulb.addColorStop(0.46, "rgba(122, 228, 214, 0.12)");
   bulb.addColorStop(1, "rgba(122, 228, 214, 0)");
-  ctx.fillStyle = bulb;
-  ctx.beginPath();
-  ctx.arc(origin.x, origin.y, 72, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  targetCtx.fillStyle = bulb;
+  targetCtx.beginPath();
+  targetCtx.arc(origin.x, origin.y, 72, 0, Math.PI * 2);
+  targetCtx.fill();
+  targetCtx.restore();
 }
 
 function getFlashlightRayPoints(agent, origin, range, spread) {
@@ -3858,8 +3864,12 @@ function drawOcclusionOverlays() {
     if (!actors.some((actor) => actorBehindOccluder(actor, occluder))) {
       continue;
     }
+    if (mapForegroundImage?.src) {
+      drawMaskedOcclusionOverlay(occluder, source, mapForegroundImage);
+      continue;
+    }
     ctx.save();
-    clipOccluder(occluder);
+    clipOccluder(ctx, occluder);
     drawMapImage(source);
     drawLightingWashes();
     drawAmbientDarkness();
@@ -3867,19 +3877,52 @@ function drawOcclusionOverlays() {
   }
 }
 
-function clipOccluder(occluder) {
-  ctx.beginPath();
+function drawMaskedOcclusionOverlay(occluder, source, alphaMask) {
+  const targetCtx = getOcclusionOverlayContext();
+  if (!targetCtx) {
+    ctx.save();
+    clipOccluder(ctx, occluder);
+    drawMapImage(source);
+    drawLightingWashes();
+    drawAmbientDarkness();
+    ctx.restore();
+    return;
+  }
+
+  targetCtx.clearRect(0, 0, world.width, world.height);
+  targetCtx.save();
+  clipOccluder(targetCtx, occluder);
+  drawMapImageTo(targetCtx, source);
+  drawLightingWashes(targetCtx);
+  drawAmbientDarkness(targetCtx);
+  targetCtx.globalCompositeOperation = "destination-in";
+  drawMapImageTo(targetCtx, alphaMask, { forceAlpha: 1 });
+  targetCtx.restore();
+
+  ctx.drawImage(occlusionCanvas, 0, 0);
+}
+
+function getOcclusionOverlayContext() {
+  if (!occlusionCanvas || occlusionCanvas.width !== world.width || occlusionCanvas.height !== world.height) {
+    occlusionCanvas = createTextureCanvas(world.width, world.height);
+    occlusionCtx = occlusionCanvas?.getContext?.("2d") ?? null;
+  }
+  return occlusionCtx;
+}
+
+function clipOccluder(targetCtx, occluder) {
+  targetCtx.beginPath();
   if (isSegmentWall(occluder)) {
     const polygon = segmentOccluderPolygon(occluder);
-    ctx.moveTo(polygon[0].x, polygon[0].y);
+    targetCtx.moveTo(polygon[0].x, polygon[0].y);
     for (const point of polygon.slice(1)) {
-      ctx.lineTo(point.x, point.y);
+      targetCtx.lineTo(point.x, point.y);
     }
-    ctx.closePath();
+    targetCtx.closePath();
   } else {
-    ctx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
+    targetCtx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
   }
-  ctx.clip();
+  targetCtx.clip();
 }
 
 function actorBehindOccluder(actor, occluder) {
