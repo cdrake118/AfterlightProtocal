@@ -109,7 +109,7 @@ button:focus-visible,
   display: grid;
   grid-template-columns: minmax(220px, 260px) minmax(520px, 1fr) auto;
   gap: 12px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .builder-panel,
@@ -489,7 +489,8 @@ textarea {
 
 .canvas-wrap {
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-items: start;
   min-height: 0;
   padding: 12px;
 }
