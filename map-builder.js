@@ -430,7 +430,7 @@ async function loadMusicLibrary(showStatus = false) {
 }
 
 function renderMusicLibrary(preferred = "") {
-  const current = preferred || selectedMusicItem()?.filename || musicLibrarySelect.value;
+  const current = preferred || filenameForMusic(map.music) || selectedMusicItem()?.filename || musicLibrarySelect.value;
   musicLibrarySelect.innerHTML = "";
   const emptyOption = document.createElement("option");
   emptyOption.value = "";
@@ -447,6 +447,11 @@ function renderMusicLibrary(preferred = "") {
 
 function selectedMusicItem() {
   return musicLibrary.find((item) => item.filename === musicLibrarySelect.value) ?? null;
+}
+
+function filenameForMusic(track) {
+  if (!track?.src) return "";
+  return musicLibrary.find((item) => item.src === track.src)?.filename ?? "";
 }
 
 function useSelectedMusic() {
@@ -660,12 +665,13 @@ function uploadAudioAsset(file) {
 }
 
 function musicFromLibraryItem(item) {
+  const existingVolume = map.music?.src === item.src ? map.music.volume : undefined;
   return {
     name: item.name,
     src: item.src,
     mimeType: item.mimeType || "audio/mpeg",
     size: item.size ?? 0,
-    volume: clamp(Number(mapMusicVolume.value), 0, 1),
+    volume: clamp(Number(existingVolume ?? mapMusicVolume.value), 0, 1),
     loop: true
   };
 }
@@ -673,6 +679,8 @@ function musicFromLibraryItem(item) {
 function updateMediaStatus() {
   updateImageStatus(floorImageStatus, map.backgroundImage, "Floor");
   updateImageStatus(foregroundImageStatus, map.foregroundImage, "Foreground");
+  const musicFilename = filenameForMusic(map.music);
+  if (musicFilename) musicLibrarySelect.value = musicFilename;
   const volume = clamp(Number(map.music?.volume ?? 1), 0, 1);
   mapMusicVolume.value = String(volume);
   musicVolumeValue.textContent = `${Math.round(volume * 100)}%`;

@@ -6675,6 +6675,7 @@ function startMapMusic() {
     return;
   }
   if (currentMusicSource && currentMusicTrackSrc === src) {
+    currentMusicGain?.gain.setTargetAtTime(clamp(Number(track.volume ?? 1), 0, 1), audioContext.currentTime, 0.025);
     return;
   }
   stopMapMusic();
