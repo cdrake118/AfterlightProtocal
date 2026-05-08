@@ -886,6 +886,9 @@ function startMatch() {
   state.stats = makeStats();
   resultsPanel.hidden = true;
   lobbyPanel.hidden = true;
+  if (partyPanel) {
+    partyPanel.hidden = true;
+  }
   if (isPartyHostActive()) {
     applyPartyAssignments();
   } else if (playerRole === "Anomaly") {
@@ -4480,11 +4483,12 @@ function drawInvestigator(agent) {
 
   const drewSprite = drawHunterSprite(agent, down, isPlayer);
   if (!drewSprite) {
-    const aimX = Math.cos(agent.aim);
     const aimY = Math.sin(agent.aim);
+    const facing = getInvestigatorFacingDirection(agent.aim);
     const stride = Math.sin(performance.now() / 120 + agent.x * 0.03 + agent.y * 0.02) * 3;
-    const handX = aimX >= 0 ? 15 : -15;
-    const handY = -43 + aimY * 5;
+    const handX = facing === "left" ? -15 : (facing === "right" ? 15 : 0);
+    const handY = facing === "down" ? -32 : (facing === "up" ? -55 : -43 + aimY * 5);
+    const shoulderX = facing === "left" ? -10 : (facing === "right" ? 10 : 0);
     ctx.save();
     ctx.globalAlpha = blinkAlpha;
     ctx.translate(agent.x, agent.y);
@@ -4523,7 +4527,7 @@ function drawInvestigator(agent) {
     ctx.strokeStyle = down ? "rgba(32, 40, 46, 0.7)" : lightenColor(agent.color, 0.36);
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(aimX >= 0 ? 10 : -10, -43);
+    ctx.moveTo(shoulderX, -43);
     ctx.lineTo(handX, handY);
     ctx.stroke();
 
@@ -4531,7 +4535,13 @@ function drawInvestigator(agent) {
     ctx.strokeStyle = "#071015";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(handX - (aimX >= 0 ? 0 : 22), handY - 6, 22, 12, 5);
+    if (facing === "left") {
+      ctx.roundRect(handX - 22, handY - 6, 22, 12, 5);
+    } else if (facing === "right") {
+      ctx.roundRect(handX, handY - 6, 22, 12, 5);
+    } else {
+      ctx.roundRect(handX - 11, handY - 6, 22, 12, 5);
+    }
     ctx.fill();
     ctx.stroke();
 
@@ -4549,6 +4559,8 @@ function drawInvestigator(agent) {
     }
     ctx.restore();
   }
+
+  drawInvestigatorHeldFlashlight(agent, down);
 
   ctx.save();
   ctx.fillStyle = "rgba(5, 8, 12, 0.68)";
@@ -4572,6 +4584,46 @@ function drawInvestigator(agent) {
     drawNameplate(agent.x, agent.y - investigatorVisual.nameplateOffset, agent.name, getInvestigatorStateLabel(agent, isPlayer), agent.color);
   }
   ctx.restore();
+}
+
+function drawInvestigatorHeldFlashlight(agent, down) {
+  if (down) {
+    return;
+  }
+  const aim = agent.aim;
+  const facing = getInvestigatorFacingDirection(aim);
+  if (facing === "up") {
+    return;
+  }
+  const originX = agent.x + Math.cos(aim) * 14;
+  const originY = agent.y - 42 + Math.sin(aim) * 10;
+  ctx.save();
+  ctx.translate(originX, originY);
+  ctx.rotate(aim);
+  ctx.shadowColor = agent.lightOn ? "#f4b35d" : "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = agent.lightOn ? 12 : 4;
+  ctx.fillStyle = "#e9fbff";
+  ctx.strokeStyle = "#071015";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(-6, -5, 22, 10, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = agent.lightOn ? "#f4b35d" : "#7a8890";
+  ctx.beginPath();
+  ctx.roundRect(13, -4, 8, 8, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function getInvestigatorFacingDirection(aim) {
+  const x = Math.cos(aim);
+  const y = Math.sin(aim);
+  if (Math.abs(y) > Math.abs(x)) {
+    return y < 0 ? "up" : "down";
+  }
+  return x < 0 ? "left" : "right";
 }
 
 function getInvestigatorStateLabel(agent, isPlayer) {
@@ -5552,6 +5604,10 @@ function renderPartyPanel() {
     partyPanel.hidden = true;
     return;
   }
+  if (state.phase !== "lobby") {
+    partyPanel.hidden = true;
+    return;
+  }
   const members = partySession.members.map((member) => `
     <li class="${member.connected === false ? "offline" : ""}">
       <strong>${member.name}</strong>
@@ -5627,6 +5683,9 @@ function publishPartySnapshot() {
       name: agent.name,
       x: Math.round(agent.x),
       y: Math.round(agent.y),
+      aim: Number(agent.aim.toFixed(3)),
+      lightOn: Boolean(agent.lightOn),
+      color: agent.color,
       resolve: Math.round(agent.resolve),
       battery: Math.round(agent.battery)
     })),

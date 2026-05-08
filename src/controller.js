@@ -14,6 +14,8 @@ const miniMap = document.querySelector("#miniMap");
 const miniMapCtx = miniMap.getContext("2d");
 const joystick = document.querySelector("#joystick");
 const joystickKnob = document.querySelector("#joystickKnob");
+const aimJoystick = document.querySelector("#aimJoystick");
+const aimJoystickKnob = document.querySelector("#aimJoystickKnob");
 const lightBtn = document.querySelector("#lightBtn");
 const dashBtn = document.querySelector("#dashBtn");
 const abilityBtn = document.querySelector("#abilityBtn");
@@ -30,10 +32,12 @@ let lobby = null;
 let ready = false;
 let sequence = 0;
 let move = { x: 0, y: 0 };
+let aim = { x: 0, y: 0 };
 let light = false;
 let dashPulse = false;
 let abilityPulse = false;
 let activePointerId = null;
+let activeAimPointerId = null;
 
 roomCodeInput.value = (params.get("code") ?? "").toUpperCase();
 nameInput.value = storedName;
@@ -81,16 +85,6 @@ skinSelect.addEventListener("change", () => {
   if (member) socket.emit("player:update", { skin: skinSelect.value });
 });
 
-lightBtn.addEventListener("pointerdown", (event) => {
-  event.preventDefault();
-  light = true;
-  lightBtn.classList.add("active");
-});
-
-lightBtn.addEventListener("pointerup", releaseLight);
-lightBtn.addEventListener("pointercancel", releaseLight);
-lightBtn.addEventListener("pointerleave", releaseLight);
-
 dashBtn.addEventListener("click", () => {
   if (member?.role !== "Anomaly") {
     return;
@@ -110,15 +104,35 @@ joystick.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   activePointerId = event.pointerId;
   joystick.setPointerCapture(activePointerId);
-  updateJoystick(event);
+  move = updateStick(event, joystick, joystickKnob);
 });
 
 joystick.addEventListener("pointermove", (event) => {
-  if (event.pointerId === activePointerId) updateJoystick(event);
+  if (event.pointerId === activePointerId) move = updateStick(event, joystick, joystickKnob);
 });
 
 joystick.addEventListener("pointerup", releaseJoystick);
 joystick.addEventListener("pointercancel", releaseJoystick);
+
+aimJoystick.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  if (member?.role !== "Investigator") return;
+  activeAimPointerId = event.pointerId;
+  aimJoystick.setPointerCapture(activeAimPointerId);
+  aim = updateStick(event, aimJoystick, aimJoystickKnob);
+  light = Math.hypot(aim.x, aim.y) > 0.08;
+  aimJoystick.classList.toggle("active", light);
+});
+
+aimJoystick.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== activeAimPointerId) return;
+  aim = updateStick(event, aimJoystick, aimJoystickKnob);
+  light = Math.hypot(aim.x, aim.y) > 0.08;
+  aimJoystick.classList.toggle("active", light);
+});
+
+aimJoystick.addEventListener("pointerup", releaseAimJoystick);
+aimJoystick.addEventListener("pointercancel", releaseAimJoystick);
 
 socket?.on("connect", () => {
   setJoinStatus("Connected. Enter a room code.");
@@ -157,10 +171,11 @@ socket?.on("host:state", (state) => {
 setInterval(() => {
   if (!member || !socket?.connected) return;
   sequence += 1;
+  const aimVector = Math.hypot(aim.x, aim.y) > 0.08 ? aim : move;
   socket.emit("player:input", {
     move,
-    aim: move,
-    light,
+    aim: member?.role === "Investigator" ? aimVector : move,
+    light: member?.role === "Investigator" ? light : false,
     dash: member?.role === "Anomaly" ? dashPulse : false,
     ability: abilityPulse,
     sequence
@@ -186,14 +201,17 @@ function renderLobby() {
   roomCodeLabel.textContent = `Room ${lobby.code}`;
   playerLabel.textContent = `${member.name}`;
   setRole(member.role);
-  lightBtn.textContent = member.role === "Anomaly" ? "Grab" : "Light";
+  padScreen.dataset.role = member.role.toLowerCase();
+  lightBtn.hidden = true;
+  aimJoystick.hidden = member.role !== "Investigator";
   abilityBtn.textContent = member.role === "Anomaly" ? "Blackout" : "Ping";
   dashBtn.hidden = member.role !== "Anomaly";
+  if (member.role !== "Investigator") releaseAimJoystick();
   padStatus.textContent = `${member.role} assigned. ${lobby.members.filter((item) => item.connected).length} joined.`;
 }
 
-function updateJoystick(event) {
-  const rect = joystick.getBoundingClientRect();
+function updateStick(event, stick, knob) {
+  const rect = stick.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   const max = rect.width * 0.34;
@@ -203,8 +221,8 @@ function updateJoystick(event) {
   const scale = len > max ? max / len : 1;
   const knobX = dx * scale;
   const knobY = dy * scale;
-  joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
-  move = len < rect.width * 0.08 ? { x: 0, y: 0 } : {
+  knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+  return len < rect.width * 0.08 ? { x: 0, y: 0 } : {
     x: clamp(dx / max, -1, 1),
     y: clamp(dy / max, -1, 1)
   };
@@ -217,9 +235,13 @@ function releaseJoystick(event) {
   joystickKnob.style.transform = "translate(-50%, -50%)";
 }
 
-function releaseLight() {
+function releaseAimJoystick(event = null) {
+  if (event && event.pointerId !== activeAimPointerId) return;
+  activeAimPointerId = null;
+  aim = { x: 0, y: 0 };
   light = false;
-  lightBtn.classList.remove("active");
+  aimJoystick.classList.remove("active");
+  aimJoystickKnob.style.transform = "translate(-50%, -50%)";
 }
 
 function drawMiniMap(state, role) {
@@ -247,10 +269,41 @@ function drawMiniMap(state, role) {
     miniMapCtx.fillRect(sx(wall.x), sy(wall.y), (wall.w / 1280) * (w - 16), (wall.h / 720) * (h - 16));
   }
   for (const agent of state?.investigators ?? []) {
-    miniMapCtx.fillStyle = agent.resolve <= 0 ? "#f4b35d" : "#7ae4d6";
+    const x = sx(agent.x);
+    const y = sy(agent.y);
+    const facing = Number(agent.aim) || 0;
+    if (agent.lightOn && agent.resolve > 0) {
+      miniMapCtx.save();
+      miniMapCtx.translate(x, y);
+      miniMapCtx.rotate(facing);
+      miniMapCtx.fillStyle = "rgba(244, 179, 93, 0.2)";
+      miniMapCtx.strokeStyle = "rgba(244, 179, 93, 0.48)";
+      miniMapCtx.lineWidth = 1;
+      miniMapCtx.beginPath();
+      miniMapCtx.moveTo(0, 0);
+      miniMapCtx.lineTo(36, -12);
+      miniMapCtx.lineTo(52, 0);
+      miniMapCtx.lineTo(36, 12);
+      miniMapCtx.closePath();
+      miniMapCtx.fill();
+      miniMapCtx.stroke();
+      miniMapCtx.restore();
+    }
+    miniMapCtx.strokeStyle = agent.lightOn ? "#f4b35d" : "rgba(248, 251, 253, 0.74)";
+    miniMapCtx.lineWidth = 2;
+    miniMapCtx.beginPath();
+    miniMapCtx.moveTo(x, y);
+    miniMapCtx.lineTo(x + Math.cos(facing) * 11, y + Math.sin(facing) * 11);
+    miniMapCtx.stroke();
+  }
+  for (const agent of state?.investigators ?? []) {
+    miniMapCtx.fillStyle = agent.resolve <= 0 ? "#f4b35d" : (agent.color ?? "#7ae4d6");
     miniMapCtx.beginPath();
     miniMapCtx.arc(sx(agent.x), sy(agent.y), 4, 0, Math.PI * 2);
     miniMapCtx.fill();
+    miniMapCtx.strokeStyle = agent.lightOn ? "#f4b35d" : "rgba(5, 8, 12, 0.8)";
+    miniMapCtx.lineWidth = 1.5;
+    miniMapCtx.stroke();
   }
   if (role === "Anomaly" && state?.anomaly) {
     miniMapCtx.fillStyle = "#e76f8a";
