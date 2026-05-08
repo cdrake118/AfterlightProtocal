@@ -849,7 +849,8 @@ function installBuilderPlaytestMap() {
     backgroundImage: builderMap.backgroundImage ? { ...builderMap.backgroundImage } : null,
     foregroundImage: builderMap.foregroundImage ? { ...builderMap.foregroundImage } : null,
     occluders: Array.isArray(builderMap.occluders) ? builderMap.occluders.map((occluder) => ({ ...occluder })) : [],
-    music: builderMap.music ? { ...builderMap.music } : null
+    music: builderMap.music ? { ...builderMap.music } : null,
+    soundEffects: builderMap.soundEffects && typeof builderMap.soundEffects === "object" ? { ...builderMap.soundEffects } : {}
   };
 }
 
@@ -908,6 +909,7 @@ function startMatch() {
 function beginMatch() {
   state.phase = "playing";
   countdown = 0;
+  playMapSoundCue("round_intro");
   startMapMusic();
   publishPresence("playing");
   publishMatchEvent("match_started", makeMatchSnapshot(), true);
@@ -917,6 +919,7 @@ function beginMatch() {
 function endMatch(text) {
   state.phase = "ended";
   stopMapMusic();
+  playMapSoundCue("round_outro");
   state.stats.outcome = text;
   const summary = makeRoundSummary(text);
   lastRoundSummary = summary;
@@ -1829,6 +1832,7 @@ function collapseInvestigator(agent) {
   state.stats.ghostCatches += 1;
   createRing(agent.x, agent.y, "#e76f8a", 72, 0.48);
   burst(agent.x, agent.y, "#e76f8a", 22);
+  playSound("downed");
   if (agent === state.player && playerRole === "Investigator") {
     setStatus("You were caught by the anomaly");
   } else {
@@ -1974,6 +1978,9 @@ function spawnBatteryPickup(announce) {
   if (announce && playerRole === "Investigator") {
     setStatus("Battery pickup appeared");
   }
+  if (announce) {
+    playSound("battery_spawn");
+  }
   return true;
 }
 
@@ -2014,6 +2021,7 @@ function spawnComebackBattery() {
     ghostDistance: null
   });
   setStatus("Overcharge battery appeared");
+  playSound("battery_spawn");
   return true;
 }
 
@@ -6479,6 +6487,9 @@ function playSound(type) {
   if (!ensureAudio()) {
     return;
   }
+  if (playMapSoundEffect(type)) {
+    return;
+  }
   if (playManifestSound(type)) {
     return;
   }
@@ -6535,6 +6546,8 @@ function playSound(type) {
     signal: [260, 0.055, "sine", 0.04],
     lightning: [1180, 0.22, "sawtooth", 0.07],
     revive: [680, 0.26, "triangle", 0.08],
+    downed: [190, 0.22, "sawtooth", 0.07],
+    battery_spawn: [980, 0.16, "triangle", 0.06],
     pickup: [760, 0.1, "sine", 0.075],
     hit: [440, 0.045, "square", 0.05],
     win: [520, 0.34, "triangle", 0.09],
@@ -6558,6 +6571,33 @@ function playSound(type) {
   osc.connect(gain).connect(getAudioDestination("sfx"));
   osc.start(now);
   osc.stop(now + duration + 0.02);
+}
+
+function playMapSoundCue(type) {
+  if (!soundEnabled || !ensureAudio()) {
+    return false;
+  }
+  return playMapSoundEffect(type);
+}
+
+function playMapSoundEffect(type) {
+  const entry = maps[currentMapName]?.soundEffects?.[type];
+  if (!entry?.src || missingAudioAssets.has(entry.src)) {
+    return false;
+  }
+  const buffer = audioBuffers.get(entry.src);
+  if (!buffer) {
+    getDecodedAudioBuffer(entry.src)
+      .then((decoded) => {
+        if (soundEnabled) {
+          playAudioBufferEntry(decoded, entry);
+        }
+      })
+      .catch(() => {});
+    return true;
+  }
+  playAudioBufferEntry(buffer, entry);
+  return true;
 }
 
 function playClickSound(now, startFrequency, endFrequency, duration, volume) {
@@ -6595,6 +6635,11 @@ function playManifestSound(type) {
     loadAudioBuffer(entry.src);
     return false;
   }
+  playAudioBufferEntry(buffer, entry);
+  return true;
+}
+
+function playAudioBufferEntry(buffer, entry) {
   const source = audioContext.createBufferSource();
   const gain = audioContext.createGain();
   source.buffer = buffer;
@@ -6605,7 +6650,6 @@ function playManifestSound(type) {
   if (!entry.loop) {
     source.stop(audioContext.currentTime + buffer.duration + 0.02);
   }
-  return true;
 }
 
 function startMapMusic() {

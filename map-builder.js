@@ -28,6 +28,30 @@ const defaultEvent = {
   effect: "reveal"
 };
 
+const soundEffectDefinitions = [
+  { id: "ghost_shock", label: "Anomaly stunned", bus: "sfx" },
+  { id: "ghost_damage", label: "Anomaly taking damage", bus: "sfx" },
+  { id: "ghost_escape", label: "Anomaly running away", bus: "sfx" },
+  { id: "ghost_escape_loop", label: "Anomaly escape loop", bus: "sfx" },
+  { id: "ghost_grab", label: "Investigator being caught", bus: "sfx" },
+  { id: "battery_spawn", label: "Battery spawning", bus: "sfx" },
+  { id: "pickup", label: "Battery being picked up", bus: "sfx" },
+  { id: "round_intro", label: "Game intro music", bus: "music" },
+  { id: "round_outro", label: "Game outro music", bus: "music" },
+  { id: "flashlight_on", label: "Flashlight turned on", bus: "sfx" },
+  { id: "flashlight_off", label: "Flashlight turned off", bus: "sfx" },
+  { id: "revive", label: "Investigator revived", bus: "sfx" },
+  { id: "downed", label: "Investigator downed", bus: "sfx" },
+  { id: "blackout", label: "Anomaly blackout", bus: "sfx" },
+  { id: "dash", label: "Dash / speed burst", bus: "sfx" },
+  { id: "ability", label: "Pulse scan ability", bus: "sfx" },
+  { id: "relay", label: "Relay charged", bus: "sfx" },
+  { id: "lightning", label: "Arena event / lightning", bus: "sfx" },
+  { id: "win", label: "Team wins", bus: "sfx" },
+  { id: "lose", label: "Anomaly wins", bus: "sfx" },
+  { id: "hit", label: "Damage impact", bus: "sfx" }
+];
+
 const sampleMap = {
   name: "Manor Party",
   size: defaultMapSize,
@@ -48,6 +72,7 @@ const sampleMap = {
   decorations: [],
   occluders: [],
   music: null,
+  soundEffects: {},
   walls: [
     { x: 92, y: 96, w: 1096, h: 22 },
     { x: 92, y: 602, w: 1096, h: 22 },
@@ -88,6 +113,7 @@ let lastPointerEvent = null;
 let componentClipboard = null;
 let activeSaveSlot = "";
 let musicLibrary = [];
+let soundEffectLibrary = [];
 
 const imageCache = new Map();
 
@@ -108,12 +134,16 @@ const backgroundFile = document.querySelector("#backgroundFile");
 const foregroundFile = document.querySelector("#foregroundFile");
 const decorationFile = document.querySelector("#decorationFile");
 const musicFile = document.querySelector("#musicFile");
+const soundEffectFile = document.querySelector("#soundEffectFile");
 const mediaStatus = document.querySelector("#mediaStatus");
 const musicStatus = document.querySelector("#musicStatus");
 const musicLibrarySelect = document.querySelector("#musicLibrarySelect");
 const mapMusicVolume = document.querySelector("#mapMusicVolume");
 const musicVolumeValue = document.querySelector("#musicVolumeValue");
 const musicVolumeField = document.querySelector("#musicVolumeField");
+const soundEffectLibrarySelect = document.querySelector("#soundEffectLibrarySelect");
+const soundEffectsStatus = document.querySelector("#soundEffectsStatus");
+const soundEffectsList = document.querySelector("#soundEffectsList");
 const assetTrayEl = document.querySelector("#assetTray");
 const gridToggle = document.querySelector("#gridToggle");
 const snapToggle = document.querySelector("#snapToggle");
@@ -145,6 +175,7 @@ validateMap();
 renderAssetTray();
 renderSavedMaps();
 loadMusicLibrary();
+loadSoundEffectLibrary();
 commitHistory("Initial");
 draw();
 
@@ -204,6 +235,9 @@ function wireControls() {
   document.querySelector("#useMusicBtn").addEventListener("click", useSelectedMusic);
   document.querySelector("#refreshMusicBtn").addEventListener("click", () => loadMusicLibrary(true));
   document.querySelector("#deleteMusicBtn").addEventListener("click", deleteSelectedMusic);
+  document.querySelector("#soundEffectUploadBtn").addEventListener("click", () => soundEffectFile.click());
+  document.querySelector("#refreshSoundEffectsBtn").addEventListener("click", () => loadSoundEffectLibrary(true));
+  document.querySelector("#deleteSoundEffectBtn").addEventListener("click", deleteSelectedSoundEffect);
   document.querySelector("#saveNamedBtn").addEventListener("click", saveNamedMap);
   document.querySelector("#loadNamedBtn").addEventListener("click", loadNamedMap);
   document.querySelector("#deleteNamedBtn").addEventListener("click", deleteNamedMap);
@@ -211,6 +245,7 @@ function wireControls() {
   foregroundFile.addEventListener("change", importForegroundImage);
   decorationFile.addEventListener("change", importDecorationImage);
   musicFile.addEventListener("change", importMusicFile);
+  soundEffectFile.addEventListener("change", importSoundEffectFile);
   mapMusicVolume.addEventListener("input", () => {
     if (!map.music) {
       updateMediaStatus();
@@ -231,6 +266,8 @@ function wireControls() {
     if (!button) return;
     selectAsset(Number(button.dataset.assetIndex));
   });
+  soundEffectsList.addEventListener("change", handleSoundEffectAssignment);
+  soundEffectsList.addEventListener("input", handleSoundEffectVolume);
   layerList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-layer-ref]");
     if (!button) return;
@@ -404,6 +441,21 @@ async function importMusicFile() {
   }
 }
 
+async function importSoundEffectFile() {
+  const [file] = soundEffectFile.files;
+  if (!file) return;
+  try {
+    const uploaded = await uploadSoundEffectAsset(file);
+    soundEffectLibrary = [uploaded, ...soundEffectLibrary.filter((item) => item.filename !== uploaded.filename)];
+    renderSoundEffectLibrary(uploaded.filename);
+    markStatus("Sound effect uploaded");
+  } catch (error) {
+    markStatus(`Sound effect failed: ${error.message}`);
+  } finally {
+    soundEffectFile.value = "";
+  }
+}
+
 async function loadMusicLibrary(showStatus = false) {
   try {
     const response = await fetch("/api/map-music");
@@ -416,6 +468,21 @@ async function loadMusicLibrary(showStatus = false) {
     musicLibrary = [];
     renderMusicLibrary();
     if (showStatus) markStatus(`Music library failed: ${error.message}`);
+  }
+}
+
+async function loadSoundEffectLibrary(showStatus = false) {
+  try {
+    const response = await fetch("/api/sound-effects");
+    const payload = await response.json();
+    if (!response.ok || payload.ok === false) throw new Error(payload.error || "Sound effect library could not load");
+    soundEffectLibrary = Array.isArray(payload.soundEffects) ? payload.soundEffects : [];
+    renderSoundEffectLibrary();
+    if (showStatus) markStatus(soundEffectLibrary.length ? "Sound library refreshed" : "No server sound effects yet");
+  } catch (error) {
+    soundEffectLibrary = [];
+    renderSoundEffectLibrary();
+    if (showStatus) markStatus(`Sound library failed: ${error.message}`);
   }
 }
 
@@ -435,8 +502,29 @@ function renderMusicLibrary(preferred = "") {
   musicLibrarySelect.value = musicLibrary.some((item) => item.filename === current) ? current : "";
 }
 
+function renderSoundEffectLibrary(preferred = "") {
+  const current = preferred || selectedSoundEffectItem()?.filename || soundEffectLibrarySelect.value;
+  soundEffectLibrarySelect.innerHTML = "";
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = soundEffectLibrary.length ? "Choose server audio" : "No server sound effects uploaded";
+  soundEffectLibrarySelect.append(emptyOption);
+  for (const item of soundEffectLibrary) {
+    const option = document.createElement("option");
+    option.value = item.filename;
+    option.textContent = `${item.name} (${formatBytes(item.size)})`;
+    soundEffectLibrarySelect.append(option);
+  }
+  soundEffectLibrarySelect.value = soundEffectLibrary.some((item) => item.filename === current) ? current : "";
+  renderSoundEffectRows();
+}
+
 function selectedMusicItem() {
   return musicLibrary.find((item) => item.filename === musicLibrarySelect.value) ?? null;
+}
+
+function selectedSoundEffectItem() {
+  return soundEffectLibrary.find((item) => item.filename === soundEffectLibrarySelect.value) ?? null;
 }
 
 function useSelectedMusic() {
@@ -449,6 +537,31 @@ function useSelectedMusic() {
   updateMediaStatus();
   changed();
   markStatus(`Using ${item.name}`);
+}
+
+async function deleteSelectedSoundEffect() {
+  const item = selectedSoundEffectItem();
+  if (!item) {
+    markStatus("Choose server audio to remove");
+    return;
+  }
+  for (const [key, effect] of Object.entries(map.soundEffects ?? {})) {
+    if (effect?.src === item.src) {
+      delete map.soundEffects[key];
+    }
+  }
+  try {
+    const response = await fetch(`/api/sound-effects/${encodeURIComponent(item.filename)}`, { method: "DELETE" });
+    const payload = await response.json();
+    if (!response.ok || payload.ok === false) throw new Error(payload.error || "Sound effect could not be removed");
+    soundEffectLibrary = soundEffectLibrary.filter((entry) => entry.filename !== item.filename);
+    renderSoundEffectLibrary();
+    updateMediaStatus();
+    changed(false);
+    markStatus(`Removed ${item.name}`);
+  } catch (error) {
+    markStatus(`Remove failed: ${error.message}`);
+  }
 }
 
 async function deleteSelectedMusic() {
@@ -472,6 +585,92 @@ async function deleteSelectedMusic() {
   } catch (error) {
     markStatus(`Remove failed: ${error.message}`);
   }
+}
+
+function renderSoundEffectRows() {
+  soundEffectsList.innerHTML = "";
+  const assigned = map.soundEffects ?? {};
+  for (const definition of soundEffectDefinitions) {
+    const current = assigned[definition.id] ?? null;
+    const row = document.createElement("div");
+    row.className = "sound-effect-row";
+
+    const top = document.createElement("div");
+    top.className = "sound-row-top";
+    const title = document.createElement("strong");
+    title.textContent = definition.label;
+    const detail = document.createElement("small");
+    detail.textContent = current?.name || "Default";
+    top.append(title, detail);
+
+    const select = document.createElement("select");
+    select.dataset.soundEvent = definition.id;
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Default / none";
+    select.append(defaultOption);
+    for (const item of soundEffectLibrary) {
+      const option = document.createElement("option");
+      option.value = item.filename;
+      option.textContent = item.name;
+      select.append(option);
+    }
+    if (current?.src && !soundEffectLibrary.some((item) => item.src === current.src)) {
+      const option = document.createElement("option");
+      option.value = current.src;
+      option.textContent = `${current.name} (assigned)`;
+      select.append(option);
+    }
+    select.value = soundEffectFilenameForEffect(current);
+
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = "0";
+    range.max = "1";
+    range.step = "0.05";
+    range.value = String(clamp(Number(current?.volume ?? 1), 0, 1));
+    range.disabled = !current;
+    range.dataset.soundVolume = definition.id;
+
+    const label = document.createElement("label");
+    label.append(select);
+    row.append(top, label, range);
+    soundEffectsList.append(row);
+  }
+  updateSoundEffectsStatus();
+}
+
+function handleSoundEffectAssignment(event) {
+  const select = event.target.closest("[data-sound-event]");
+  if (!select) return;
+  const definition = soundEffectDefinitions.find((item) => item.id === select.dataset.soundEvent);
+  if (!definition) return;
+  if (!map.soundEffects) map.soundEffects = {};
+  if (!select.value) {
+    delete map.soundEffects[definition.id];
+  } else {
+    const item = soundEffectLibrary.find((entry) => entry.filename === select.value)
+      ?? soundEffectLibrary.find((entry) => entry.src === select.value);
+    if (!item) {
+      markStatus("Choose uploaded server audio");
+      renderSoundEffectRows();
+      return;
+    }
+    const previousVolume = map.soundEffects[definition.id]?.volume;
+    map.soundEffects[definition.id] = soundEffectFromLibraryItem(item, definition, previousVolume);
+  }
+  renderSoundEffectRows();
+  changed(false);
+}
+
+function handleSoundEffectVolume(event) {
+  const range = event.target.closest("[data-sound-volume]");
+  if (!range) return;
+  const effect = map.soundEffects?.[range.dataset.soundVolume];
+  if (!effect) return;
+  effect.volume = clamp(Number(range.value), 0, 1);
+  updateSoundEffectsStatus();
+  changed(false);
 }
 
 function selectBackground() {
@@ -606,6 +805,39 @@ function uploadAudioAsset(file) {
   });
 }
 
+function uploadSoundEffectAsset(file) {
+  return new Promise((resolve, reject) => {
+    const isSupportedAudio = ["audio/mpeg", "audio/mp3", "audio/ogg", "audio/wav", "audio/x-wav"].includes(file.type)
+      || /\.(mp3|ogg|wav)$/i.test(file.name);
+    if (!isSupportedAudio) {
+      reject(new Error("Choose an MP3, OGG, or WAV file"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", async () => {
+      try {
+        const response = await fetch("/api/sound-effects", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: file.name,
+            mimeType: file.type || "audio/mpeg",
+            size: file.size,
+            dataUrl: String(reader.result)
+          })
+        });
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) throw new Error(payload.error || "Audio could not be uploaded");
+        resolve(payload.soundEffect);
+      } catch (error) {
+        reject(error);
+      }
+    }, { once: true });
+    reader.addEventListener("error", () => reject(new Error("Audio could not be read")), { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
 function musicFromLibraryItem(item) {
   return {
     name: item.name,
@@ -617,6 +849,25 @@ function musicFromLibraryItem(item) {
   };
 }
 
+function soundEffectFromLibraryItem(item, definition, volume = 1) {
+  return {
+    name: item.name,
+    src: item.src,
+    mimeType: item.mimeType || "audio/mpeg",
+    size: item.size ?? 0,
+    volume: clamp(Number(volume ?? 1), 0, 1),
+    bus: definition.bus ?? "sfx",
+    loop: false
+  };
+}
+
+function soundEffectFilenameForEffect(effect) {
+  if (!effect?.src) return "";
+  const libraryItem = soundEffectLibrary.find((item) => item.src === effect.src);
+  if (libraryItem) return libraryItem.filename;
+  return effect.src;
+}
+
 function updateMediaStatus() {
   const volume = clamp(Number(map.music?.volume ?? 1), 0, 1);
   mapMusicVolume.value = String(volume);
@@ -624,6 +875,13 @@ function updateMediaStatus() {
   musicVolumeField.classList.toggle("is-disabled", !map.music);
   mapMusicVolume.disabled = !map.music;
   musicStatus.textContent = map.music ? `Music: ${map.music.name}` : "No map music loaded";
+  updateSoundEffectsStatus();
+}
+
+function updateSoundEffectsStatus() {
+  if (!soundEffectsStatus) return;
+  const count = Object.values(map.soundEffects ?? {}).filter((effect) => effect?.src).length;
+  soundEffectsStatus.textContent = count ? `${count} sound effect${count === 1 ? "" : "s"} assigned` : "No sound effects assigned";
 }
 
 function preloadImage(src) {
@@ -1643,6 +1901,7 @@ function drawLabel(label, selectedState) {
 function syncForm() {
   preloadMapImages();
   updateMediaStatus();
+  renderSoundEffectRows();
   mapName.value = map.name;
   floorInputs.forEach((input, index) => {
     input.value = map.floor[index];
@@ -1826,6 +2085,7 @@ function toGameMap() {
     decorations: map.decorations.map((decoration) => ({ ...decoration })),
     occluders: map.occluders.map((occluder) => ({ ...occluder })),
     music: map.music ? { ...map.music } : null,
+    soundEffects: serializeSoundEffects(map.soundEffects),
     walls: map.walls.map(serializeWall),
     props: map.props.map((prop) => ({ x: prop.x, y: prop.y, w: prop.w, h: prop.h, color: prop.color }))
   };
@@ -1855,7 +2115,8 @@ function toTiledMap() {
       musicSrc: map.music?.src,
       musicMimeType: map.music?.mimeType,
       musicVolume: map.music ? String(map.music.volume ?? 1) : "",
-      musicLoop: map.music ? "true" : ""
+      musicLoop: map.music ? "true" : "",
+      soundEffectsJson: Object.keys(map.soundEffects ?? {}).length ? JSON.stringify(serializeSoundEffects(map.soundEffects)) : ""
     }),
     layers: [
       ...(map.backgroundImage ? [{
@@ -2054,6 +2315,7 @@ function fromTiledMap(tiled) {
       volume: Number(prop(tiled, "musicVolume", 1)),
       loop: String(prop(tiled, "musicLoop", "true")) !== "false"
     } : null,
+    soundEffects: parseSoundEffectsJson(prop(tiled, "soundEffectsJson", "")),
     walls: objects("collision", "wall").map(rect),
     props: objects("props", "prop").map((object) => ({ ...rect(object), color: prop(object, "color", "#26323a") }))
   });
@@ -2085,6 +2347,7 @@ function normalizeGameMap(source) {
     decorations: (source.decorations ?? []).filter((decoration) => decoration?.src).map(normalizeImageRect),
     occluders: (source.occluders ?? []).map(normalizeOccluder),
     music: source.music ? normalizeMusic(source.music) : null,
+    soundEffects: normalizeSoundEffects(source.soundEffects),
     walls: (source.walls ?? []).map(normalizeWall),
     props: (source.props ?? []).map((prop) => ({ ...clampRect(prop), color: String(prop.color ?? "#26323a") }))
   };
@@ -2106,6 +2369,7 @@ function makeNewMap() {
     decorations: [],
     occluders: [],
     music: null,
+    soundEffects: {},
     walls: [
       { x: 96, y: 96, w: 1088, h: 24 },
       { x: 96, y: 600, w: 1088, h: 24 },
@@ -2354,6 +2618,47 @@ function normalizeMusic(music) {
     volume: clamp(Number(music.volume ?? 1), 0, 1),
     loop: music.loop !== false
   };
+}
+
+function parseSoundEffectsJson(value) {
+  if (!value) return {};
+  try {
+    return normalizeSoundEffects(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
+function normalizeSoundEffects(soundEffects) {
+  if (!soundEffects || typeof soundEffects !== "object" || Array.isArray(soundEffects)) {
+    return {};
+  }
+  const allowed = new Set(soundEffectDefinitions.map((definition) => definition.id));
+  return Object.entries(soundEffects).reduce((next, [id, effect]) => {
+    if (!allowed.has(id)) return next;
+    const normalized = normalizeSoundEffect(effect, id);
+    if (normalized) next[id] = normalized;
+    return next;
+  }, {});
+}
+
+function normalizeSoundEffect(effect, id) {
+  const src = String(effect?.src ?? "");
+  if (!src) return null;
+  const definition = soundEffectDefinitions.find((item) => item.id === id);
+  return {
+    name: String(effect.name ?? definition?.label ?? "Sound Effect"),
+    src,
+    mimeType: String(effect.mimeType ?? "audio/mpeg"),
+    size: Number(effect.size ?? 0),
+    volume: clamp(Number(effect.volume ?? 1), 0, 1),
+    bus: effect.bus === "music" ? "music" : definition?.bus ?? "sfx",
+    loop: effect.loop === true
+  };
+}
+
+function serializeSoundEffects(soundEffects) {
+  return normalizeSoundEffects(soundEffects);
 }
 
 function isSelected(kind, index) {

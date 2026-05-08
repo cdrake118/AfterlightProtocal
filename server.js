@@ -13,8 +13,11 @@ const roomTtlMs = 1000 * 60 * 60 * 6;
 const storageRoot = resolve(process.env.AFTERLIGHT_STORAGE_DIR ?? (existsSync("/data") ? "/data/afterlight" : join(root, ".afterlight-data")));
 const storageDirs = makeStorageDirs(storageRoot);
 const mapMusicDir = resolve(process.env.MAP_MUSIC_DIR ?? storageDirs.music);
+const soundEffectsDir = resolve(process.env.MAP_SOUND_EFFECTS_DIR ?? storageDirs.sfx);
 const maxMapMusicUploadBytes = 12 * 1024 * 1024;
 const maxMapMusicRequestBytes = Math.ceil(maxMapMusicUploadBytes * 1.4) + 2048;
+const maxSoundEffectUploadBytes = 12 * 1024 * 1024;
+const maxSoundEffectRequestBytes = Math.ceil(maxSoundEffectUploadBytes * 1.4) + 2048;
 const maxMapImageUploadBytes = 10 * 1024 * 1024;
 const maxMapImageRequestBytes = Math.ceil(maxMapImageUploadBytes * 1.4) + 2048;
 const maxMapDataBytes = 2 * 1024 * 1024;
@@ -93,6 +96,18 @@ const server = createServer(async (req, res) => {
       sendJson(res, await deleteMapMusic(requestUrl.pathname));
       return;
     }
+    if (requestUrl.pathname === "/api/sound-effects" && req.method === "GET") {
+      sendJson(res, await listSoundEffects());
+      return;
+    }
+    if (requestUrl.pathname === "/api/sound-effects" && req.method === "POST") {
+      sendJson(res, await saveSoundEffect(req), 201);
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/api/sound-effects/") && req.method === "DELETE") {
+      sendJson(res, await deleteSoundEffect(requestUrl.pathname));
+      return;
+    }
     if (requestUrl.pathname === "/api/map-images" && req.method === "GET") {
       sendJson(res, await listMapImages(requestUrl.searchParams.get("kind")));
       return;
@@ -107,6 +122,10 @@ const server = createServer(async (req, res) => {
     }
     if (requestUrl.pathname.startsWith("/assets/audio/maps/") && (req.method === "GET" || req.method === "HEAD")) {
       await sendMapMusicAsset(requestUrl.pathname, res);
+      return;
+    }
+    if (requestUrl.pathname.startsWith("/storage/audio/sfx/") && (req.method === "GET" || req.method === "HEAD")) {
+      await sendSoundEffectAsset(requestUrl.pathname, res);
       return;
     }
     if (requestUrl.pathname.startsWith("/storage/images/") && (req.method === "GET" || req.method === "HEAD")) {
@@ -357,6 +376,7 @@ function makeStorageDirs(base) {
     imageProps: join(base, "media", "images", "props"),
     imageMisc: join(base, "media", "images", "misc"),
     music: join(base, "media", "music"),
+    sfx: join(base, "media", "sfx"),
     uploads: join(base, "uploads"),
     logs: join(base, "logs"),
     tmp: join(base, "tmp")
@@ -400,7 +420,8 @@ async function storageStatus() {
           props: relativeStoragePath(storageDirs.imageProps),
           misc: relativeStoragePath(storageDirs.imageMisc)
         },
-        music: relativeStoragePath(mapMusicDir)
+        music: relativeStoragePath(mapMusicDir),
+        sfx: relativeStoragePath(soundEffectsDir)
       },
       uploads: relativeStoragePath(storageDirs.uploads),
       logs: relativeStoragePath(storageDirs.logs),
@@ -410,6 +431,7 @@ async function storageStatus() {
       maps: await countFiles(storageDirs.mapPublished),
       images: await countFiles(storageDirs.images),
       music: await countFiles(mapMusicDir),
+      sfx: await countFiles(soundEffectsDir),
       logs: await countFiles(storageDirs.logs)
     }
   };
@@ -487,6 +509,60 @@ async function sendMapMusicAsset(pathname, res) {
   await sendFile(res, filePath);
 }
 
+async function listSoundEffects() {
+  await mkdir(soundEffectsDir, { recursive: true });
+  const entries = await readdir(soundEffectsDir, { withFileTypes: true });
+  const items = await Promise.all(entries
+    .filter((entry) => entry.isFile() && isAudioExtension(entry.name))
+    .map(async (entry) => {
+      const filePath = join(soundEffectsDir, entry.name);
+      const info = await stat(filePath);
+      return soundEffectItem(entry.name, info.size, info.mtimeMs);
+    }));
+  return { ok: true, soundEffects: items.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+async function saveSoundEffect(req) {
+  const payload = await readJsonBody(req, maxSoundEffectRequestBytes);
+  const { mimeType, bytes, extension } = dataUrlToBytes(payload.dataUrl, audioMimeTypes());
+  if (bytes.length > maxSoundEffectUploadBytes) throw httpError(413, "Audio upload is larger than 12 MB.");
+  await mkdir(soundEffectsDir, { recursive: true });
+  const filename = await uniqueStoredFilename(soundEffectsDir, `${slugifyAudioName(payload.name || "sound-effect")}${extension}`);
+  const filePath = join(soundEffectsDir, filename);
+  await writeFile(filePath, bytes);
+  const info = await stat(filePath);
+  await appendStorageLog("sfx:upload", { filename, size: info.size });
+  return { ok: true, soundEffect: soundEffectItem(filename, info.size, info.mtimeMs, mimeType) };
+}
+
+async function deleteSoundEffect(pathname) {
+  const filename = sanitizeAudioFilename(decodeURIComponent(pathname.replace(/^\/api\/sound-effects\//, "")));
+  if (!filename) throw httpError(400, "Choose a valid sound effect file.");
+  const filePath = resolveStoredFile(soundEffectsDir, filename);
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") throw httpError(404, "Sound effect not found.");
+    throw error;
+  }
+  await appendStorageLog("sfx:delete", { filename });
+  return { ok: true, deleted: filename };
+}
+
+async function sendSoundEffectAsset(pathname, res) {
+  const filename = sanitizeAudioFilename(decodeURIComponent(pathname.replace(/^\/storage\/audio\/sfx\//, "")));
+  if (!filename) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+  const filePath = resolveStoredFile(soundEffectsDir, filename);
+  if (!existsSync(filePath)) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+  await sendFile(res, filePath);
+}
+
 async function readJsonBody(req, maxBytes) {
   const chunks = [];
   let total = 0;
@@ -525,6 +601,17 @@ function mapMusicItem(filename, size, mtimeMs) {
     filename,
     src: `/assets/audio/maps/${filename}`,
     mimeType: mimeTypes[extname(filename).toLowerCase()] ?? "audio/mpeg",
+    size,
+    updatedAt: new Date(mtimeMs).toISOString()
+  };
+}
+
+function soundEffectItem(filename, size, mtimeMs, mimeType = null) {
+  return {
+    name: filename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+    filename,
+    src: `/storage/audio/sfx/${filename}`,
+    mimeType: mimeType ?? mimeTypes[extname(filename).toLowerCase()] ?? "audio/mpeg",
     size,
     updatedAt: new Date(mtimeMs).toISOString()
   };
@@ -725,6 +812,20 @@ function imageMimeTypes() {
     "image/webp": ".webp",
     "image/svg+xml": ".svg"
   };
+}
+
+function audioMimeTypes() {
+  return {
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav"
+  };
+}
+
+function isAudioExtension(filename) {
+  return [".mp3", ".ogg", ".wav"].includes(extname(filename).toLowerCase());
 }
 
 function imageKinds() {

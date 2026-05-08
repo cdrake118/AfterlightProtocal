@@ -259,6 +259,58 @@ textarea {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.sound-menu {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.sound-effects-list {
+  display: grid;
+  gap: 8px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.sound-effect-row {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(226, 238, 246, 0.12);
+  border-radius: 8px;
+  background: rgba(3, 7, 11, 0.42);
+}
+
+.sound-effect-row label {
+  display: grid;
+  gap: 6px;
+}
+
+.sound-effect-row .sound-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sound-effect-row strong {
+  color: #f8fbfd;
+  font-size: 12px;
+}
+
+.sound-effect-row small {
+  color: #90a3af;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.sound-effect-row input[type="range"] {
+  min-height: 24px;
+  padding: 0;
+}
+
 .tool-button {
   min-width: 0;
 }
