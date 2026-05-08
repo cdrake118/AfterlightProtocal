@@ -759,6 +759,10 @@ function makeAnomaly() {
     carriedAgent: null,
     shockTimer: 0,
     escapeTimer: 0,
+    lastMoveX: 1,
+    lastMoveY: 0,
+    escapeDirX: 1,
+    escapeDirY: 0,
     aim: 0,
     ai: true,
     target: null
@@ -1093,7 +1097,7 @@ function controlAnomaly(anomaly, dt) {
     touchInvestigators(dt);
     return;
   }
-  const movement = readMovement();
+  const movement = getAnomalyMovementVector(anomaly, readMovement());
   const speed = anomaly.speed * getAnomalySpeedMultiplier(anomaly) * (anomaly.dash > 0 ? 2.15 : 1);
   if (Math.hypot(movement.x, movement.y) > 0.08) {
     anomaly.aim = Math.atan2(movement.y, movement.x);
@@ -1175,7 +1179,7 @@ function controlAnomalyFromInput(anomaly, input, dt) {
     anomaly.abilityCooldown = abilityMax.Anomaly;
     triggerBlackout({ trackStats: true, announce: true });
   }
-  const movement = normalizeInputVector(input.move);
+  const movement = getAnomalyMovementVector(anomaly, normalizeInputVector(input.move));
   const speed = anomaly.speed * getAnomalySpeedMultiplier(anomaly) * (anomaly.dash > 0 ? 2.15 : 1);
   if (Math.hypot(movement.x, movement.y) > 0.08) {
     anomaly.aim = Math.atan2(movement.y, movement.x);
@@ -1194,6 +1198,39 @@ function normalizeInputVector(value) {
   const y = clamp(Number(value?.y) || 0, -1, 1);
   const len = Math.hypot(x, y);
   return len > 1 ? { x: x / len, y: y / len } : { x, y };
+}
+
+function getAnomalyMovementVector(anomaly, movement) {
+  const len = Math.hypot(movement.x, movement.y);
+  if (anomaly.escapeTimer > 0) {
+    if (len > 0.08) {
+      setAnomalyRunDirection(anomaly, movement.x / len, movement.y / len);
+      return movement;
+    }
+    return getAnomalyEscapeDirection(anomaly);
+  }
+  if (len > 0.08) {
+    setAnomalyRunDirection(anomaly, movement.x / len, movement.y / len);
+  }
+  return movement;
+}
+
+function setAnomalyRunDirection(anomaly, x, y) {
+  anomaly.lastMoveX = x;
+  anomaly.lastMoveY = y;
+  if (anomaly.escapeTimer > 0) {
+    anomaly.escapeDirX = x;
+    anomaly.escapeDirY = y;
+  }
+}
+
+function getAnomalyEscapeDirection(anomaly) {
+  const fallbackX = Math.cos(anomaly.aim ?? 0);
+  const fallbackY = Math.sin(anomaly.aim ?? 0);
+  const x = Number.isFinite(anomaly.escapeDirX) ? anomaly.escapeDirX : fallbackX;
+  const y = Number.isFinite(anomaly.escapeDirY) ? anomaly.escapeDirY : fallbackY;
+  const len = Math.hypot(x, y) || 1;
+  return { x: x / len, y: y / len };
 }
 
 function updateAiAnomaly(dt) {
@@ -1226,6 +1263,7 @@ function updateAiAnomaly(dt) {
   const dir = fleeing ? baseAngle + Math.PI + Math.sin(performance.now() * 0.002) * 0.9 : baseAngle;
   const urgency = (relayTarget ? 1.08 : fleeing ? 1.15 : 1) * getAnomalySpeedMultiplier(anomaly);
   anomaly.aim = dir;
+  setAnomalyRunDirection(anomaly, Math.cos(dir), Math.sin(dir));
   if (fleeing && anomaly.dashCooldown <= 0) {
     anomaly.dash = 0.18;
     anomaly.dashCooldown = 2.2;
@@ -1680,6 +1718,7 @@ function resolveEchoLight(agent, dt) {
 
 function touchInvestigators(dt) {
   if (state.anomaly.carriedAgent || state.anomaly.shockTimer > 0 || state.anomaly.escapeTimer > 0) {
+    clearAnomalyCatchPressure();
     return;
   }
   for (const agent of getInvestigators()) {
@@ -1709,6 +1748,13 @@ function touchInvestigators(dt) {
       agent.catchPressure = Math.max(0, agent.catchPressure - dt * 2.4);
       agent.warningContactTime = getAnomalyProximityWarning(agent) ? agent.warningContactTime + dt : 0;
     }
+  }
+}
+
+function clearAnomalyCatchPressure() {
+  for (const agent of getInvestigators()) {
+    agent.catchPressure = 0;
+    agent.warningContactTime = 0;
   }
 }
 
@@ -1762,8 +1808,12 @@ function dropCarriedInvestigator() {
 
 function shockAnomaly() {
   const anomaly = state.anomaly;
+  const escapeX = Number.isFinite(anomaly.lastMoveX) ? anomaly.lastMoveX : Math.cos(anomaly.aim ?? 0);
+  const escapeY = Number.isFinite(anomaly.lastMoveY) ? anomaly.lastMoveY : Math.sin(anomaly.aim ?? 0);
   anomaly.shockTimer = GameBalance.ghost.shockDurationSeconds;
   anomaly.escapeTimer = 0;
+  anomaly.escapeDirX = escapeX;
+  anomaly.escapeDirY = escapeY;
   anomaly.dash = 0;
   anomaly.revealed = Math.max(anomaly.revealed, GameBalance.ghost.shockDurationSeconds);
   createRing(anomaly.x, anomaly.y, "#dff7ff", 92, 0.42);
