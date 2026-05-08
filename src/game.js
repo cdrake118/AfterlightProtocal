@@ -173,6 +173,8 @@ const GameBalance = {
   roundDurationSeconds: 300,
   ghost: {
     moveSpeed: 99.45,
+    dashDurationSeconds: 0.25,
+    dashCooldownSeconds: 2.2,
     attackBonusRange: 2,
     attackConfirmSeconds: 0.08,
     attackCooldownSeconds: 0.9,
@@ -1291,8 +1293,8 @@ function updateAiAnomaly(dt) {
   anomaly.aim = dir;
   setAnomalyRunDirection(anomaly, Math.cos(dir), Math.sin(dir));
   if (fleeing && anomaly.dashCooldown <= 0) {
-    anomaly.dash = 0.18;
-    anomaly.dashCooldown = 2.2;
+    anomaly.dash = GameBalance.ghost.dashDurationSeconds;
+    anomaly.dashCooldown = GameBalance.ghost.dashCooldownSeconds;
     revealAnomaly(0.9);
     playSound("dash");
   }
@@ -2598,8 +2600,8 @@ function tryDash() {
 
 function triggerDashForActor(actor, role) {
   if (actor.dash <= 0 && actor.dashCooldown <= 0 && state.phase === "playing") {
-    actor.dash = 0.16;
-    actor.dashCooldown = role === "Anomaly" ? 2.2 : 1.6;
+    actor.dash = role === "Anomaly" ? GameBalance.ghost.dashDurationSeconds : 0.16;
+    actor.dashCooldown = role === "Anomaly" ? GameBalance.ghost.dashCooldownSeconds : 1.6;
     if (role === "Anomaly") {
       revealAnomaly(0.9);
     }
