@@ -1492,6 +1492,10 @@ function updateSelectedFromInspector(key) {
 function setSelectedOccluderFrontEdge(position) {
   const occluder = selected?.kind === "occluder" ? readSelection(selected) : null;
   if (!occluder || isSegmentWall(occluder)) return;
+  if (position === "barrier") {
+    setSelectedOccluderFrontEdgeFromBarrier(occluder);
+    return;
+  }
   const values = {
     top: occluder.y,
     middle: occluder.y + occluder.h / 2,
@@ -1499,6 +1503,68 @@ function setSelectedOccluderFrontEdge(position) {
   };
   setOccluderFrontEdge(values[position] ?? values.middle);
   markStatus(`Front Edge set to ${titleCase(position)}`);
+}
+
+function setSelectedOccluderFrontEdgeFromBarrier(occluder) {
+  const match = bestBarrierEdgeForOccluder(occluder);
+  if (!match) {
+    markStatus("No crossing barrier found for this occluder");
+    return;
+  }
+  setOccluderFrontEdge(match.depthY);
+  markStatus(`Front Edge matched ${match.label}`);
+}
+
+function bestBarrierEdgeForOccluder(occluder) {
+  const matches = map.walls
+    .map((wall, index) => barrierEdgeCandidate(occluder, wall, index))
+    .filter(Boolean)
+    .sort((a, b) => a.score - b.score);
+  return matches[0] ?? null;
+}
+
+function barrierEdgeCandidate(occluder, wall, index) {
+  const occluderBounds = { x: occluder.x, y: occluder.y, w: occluder.w, h: occluder.h };
+  const center = { x: occluder.x + occluder.w / 2, y: occluder.y + occluder.h / 2 };
+  const isBarrier = wall.visible === false;
+  if (isSegmentWall(wall)) {
+    const pad = Math.max(wallThickness(wall) / 2, 6);
+    const bounds = {
+      x: Math.min(wall.x, wall.x2) - pad,
+      y: Math.min(wall.y, wall.y2) - pad,
+      w: Math.abs(wall.x2 - wall.x) + pad * 2,
+      h: Math.abs(wall.y2 - wall.y) + pad * 2
+    };
+    if (!rectsOverlap(occluderBounds, bounds) && !lineIntersectsRect(wall.x, wall.y, wall.x2, wall.y2, occluderBounds)) {
+      return null;
+    }
+    const point = closestPointOnSegment(center.x, center.y, wall.x, wall.y, wall.x2, wall.y2);
+    const depthY = clamp(Math.round(point.y), occluder.y, occluder.y + occluder.h);
+    const distanceToCenter = Math.abs(depthY - center.y);
+    return {
+      depthY,
+      label: `${isBarrier ? "Barrier" : "Wall"} ${index + 1}`,
+      score: (isBarrier ? 0 : 10000) + distanceToCenter
+    };
+  }
+
+  if (!rectsOverlap(occluderBounds, wall)) {
+    return null;
+  }
+  const wallTop = wall.y;
+  const wallMiddle = wall.y + wall.h / 2;
+  const wallBottom = wall.y + wall.h;
+  const candidates = [wallTop, wallMiddle, wallBottom]
+    .filter((y) => y >= occluder.y && y <= occluder.y + occluder.h);
+  const rawDepthY = candidates.length
+    ? candidates.sort((a, b) => Math.abs(a - center.y) - Math.abs(b - center.y))[0]
+    : wallMiddle;
+  const depthY = clamp(Math.round(rawDepthY), occluder.y, occluder.y + occluder.h);
+  return {
+    depthY,
+    label: `${isBarrier ? "Barrier" : "Wall"} ${index + 1}`,
+    score: (isBarrier ? 0 : 10000) + Math.abs(depthY - center.y)
+  };
 }
 
 function nudgeSelectedOccluderFrontEdge(delta) {
@@ -3242,12 +3308,17 @@ function linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
 }
 
 function distancePointToSegment(px, py, x1, y1, x2, y2) {
+  const point = closestPointOnSegment(px, py, x1, y1, x2, y2);
+  return Math.hypot(px - point.x, py - point.y);
+}
+
+function closestPointOnSegment(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1;
   const dy = y2 - y1;
   const lengthSq = dx * dx + dy * dy;
-  if (!lengthSq) return Math.hypot(px - x1, py - y1);
+  if (!lengthSq) return { x: x1, y: y1 };
   const t = clamp(((px - x1) * dx + (py - y1) * dy) / lengthSq, 0, 1);
-  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
+  return { x: x1 + dx * t, y: y1 + dy * t };
 }
 
 function segmentDistance(x1, y1, x2, y2, x3, y3, x4, y4) {
