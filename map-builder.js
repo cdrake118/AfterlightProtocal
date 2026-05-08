@@ -10,6 +10,7 @@ const resizeCornerHitRadius = 8;
 const resizeEdgeHandleLength = 34;
 const resizeIntentThreshold = 6;
 const resizeIntentRatio = 1.35;
+const occluderDepthHitPadding = 20;
 const defaultWallThickness = 24;
 const defaultBarrierThickness = 1;
 const defaultOccluderThickness = 96;
@@ -140,6 +141,7 @@ const inspector = {
   y: document.querySelector("#objectY"),
   w: document.querySelector("#objectW"),
   h: document.querySelector("#objectH"),
+  depthY: document.querySelector("#objectDepthY"),
   name: document.querySelector("#objectName"),
   color: document.querySelector("#objectColor"),
   opacity: document.querySelector("#objectOpacity"),
@@ -148,7 +150,8 @@ const inspector = {
   nameField: document.querySelector("#nameField"),
   colorField: document.querySelector("#colorField"),
   opacityField: document.querySelector("#opacityField"),
-  rotationField: document.querySelector("#rotationField")
+  rotationField: document.querySelector("#rotationField"),
+  depthField: document.querySelector("#depthField")
 };
 
 wireControls();
@@ -279,7 +282,7 @@ function wireControls() {
   canvas.addEventListener("pointerup", handlePointerUp);
   canvas.addEventListener("pointerleave", handlePointerUp);
 
-  ["x", "y", "w", "h", "name", "color", "opacity", "rotation"].forEach((key) => {
+  ["x", "y", "w", "h", "depthY", "name", "color", "opacity", "rotation"].forEach((key) => {
     inspector[key].addEventListener("input", () => updateSelectedFromInspector(key));
   });
 
@@ -730,7 +733,7 @@ function preloadImage(src) {
 function handlePointerDown(event) {
   lastPointerEvent = event;
   canvas.setPointerCapture(event.pointerId);
-  const segmentTool = activeTool === "wall" || activeTool === "barrier" || activeTool === "occluder";
+  const segmentTool = activeTool === "wall" || activeTool === "barrier";
   const wallTool = activeTool === "wall" || activeTool === "barrier";
   const wallPoint = segmentTool ? wallDrawPoint(event) : null;
   const point = wallPoint?.point ?? canvasPoint(event);
@@ -745,13 +748,9 @@ function handlePointerDown(event) {
       setSelection(hit);
       syncInspector();
       markStatus("Wall selected");
-    } else if (activeTool === "occluder" && hit?.kind === "occluder") {
-      setSelection(hit);
-      syncInspector();
-      markStatus("Occluder selected");
     } else {
       pointer = { mode: "drawSegment", kind: activeTool, start: point, current: point };
-      markStatus(activeTool === "occluder" ? "Click occluder endpoint" : "Click wall endpoint");
+      markStatus("Click wall endpoint");
     }
     draw();
     return;
@@ -795,7 +794,7 @@ function handlePointerDown(event) {
     }
     return;
   }
-  if (activeTool === "prop") {
+  if (activeTool === "prop" || activeTool === "occluder") {
     pointer = { mode: "drawRect", kind: activeTool, start: point, current: point };
     return;
   }
@@ -1349,7 +1348,7 @@ function hitOccluderDepthLine(point, occluder) {
   const depthY = occluder.depthY ?? occluder.y + occluder.h;
   return point.x >= occluder.x
     && point.x <= occluder.x + occluder.w
-    && Math.abs(point.y - depthY) <= resizeEdgeHitPadding;
+    && Math.abs(point.y - depthY) <= occluderDepthHitPadding;
 }
 
 function hitResizeEdge(point, rect) {
@@ -1464,7 +1463,7 @@ function updateSelectedFromInspector(key) {
   if (!selected || selectedGroup.length > 1) return;
   const current = readSelection(selected);
   const next = { ...current };
-  if (["x", "y", "w", "h", "opacity", "rotation"].includes(key)) {
+  if (["x", "y", "w", "h", "depthY", "opacity", "rotation"].includes(key)) {
     next[key] = Number(inspector[key].value);
   } else {
     next[key] = inspector[key].value;
@@ -1511,7 +1510,7 @@ function draw() {
   drawImageRect(map.foregroundImage, isSelected("foreground", 0));
   map.walls.forEach((wall, index) => drawWall(wall, isSelected("wall", index)));
   map.occluders.forEach((occluder, index) => drawOccluder(occluder, isSelected("occluder", index)));
-  if (activeTool === "wall" || activeTool === "barrier" || activeTool === "occluder" || pointer?.mode === "drawSegment") drawWallAnchors();
+  if (activeTool === "wall" || activeTool === "barrier" || pointer?.mode === "drawSegment") drawWallAnchors();
   map.labels.forEach((label, index) => drawLabel(label, isSelected("label", index)));
   map.batteries.forEach((battery, index) => drawPoint(battery, "#f4b35d", "B", isSelected("battery", index)));
   drawPoint(map.player, "#7ae4d6", "P", isSelected("player", 0), runtimeFootprints.investigator, "Host Investigator footprint");
@@ -1724,12 +1723,18 @@ function drawOccluder(occluder, selectedState) {
   ctx.strokeRect(occluder.x, occluder.y, occluder.w, occluder.h);
   ctx.setLineDash([]);
   const depthY = occluder.depthY ?? occluder.y + occluder.h;
-  ctx.strokeStyle = "#fff4cf";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = selectedState ? "#fff4cf" : "rgba(255,244,207,0.86)";
+  ctx.lineWidth = selectedState ? 4 : 2;
   ctx.beginPath();
   ctx.moveTo(occluder.x, depthY);
   ctx.lineTo(occluder.x + occluder.w, depthY);
   ctx.stroke();
+  ctx.fillStyle = selectedState ? "#fff4cf" : "#c7a8ff";
+  for (const x of [occluder.x, occluder.x + occluder.w]) {
+    ctx.beginPath();
+    ctx.arc(x, depthY, selectedState ? 6 : 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.fillStyle = "#f8fbfd";
   ctx.font = "900 10px Inter, sans-serif";
   ctx.textAlign = "center";
@@ -1888,6 +1893,9 @@ function syncInspector() {
   inspector.y.value = Math.round(object.y);
   inspector.w.value = Math.round(object.w ?? 0);
   inspector.h.value = Math.round(object.h ?? 0);
+  inspector.depthY.value = Math.round(object.depthY ?? object.y + (object.h ?? 0));
+  inspector.depthY.min = Math.round(object.y ?? 0);
+  inspector.depthY.max = Math.round((object.y ?? 0) + (object.h ?? 0));
   inspector.name.value = object.name ?? "";
   inspector.color.value = object.color ?? "#7ae4d6";
   inspector.opacity.value = object.opacity ?? 1;
@@ -1897,6 +1905,7 @@ function syncInspector() {
   inspector.colorField.hidden = !colorLike;
   inspector.opacityField.hidden = !opacityLike;
   inspector.rotationField.hidden = !opacityLike;
+  inspector.depthField.hidden = !(selected.kind === "occluder" && !isSegmentWall(object));
 }
 
 function setExportMode(mode) {
