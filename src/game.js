@@ -205,8 +205,8 @@ const GameBalance = {
     reviveRange: 72
   },
   warning: {
-    weakDistance: 190,
-    strongDistance: 105,
+    weakDistance: 162,
+    strongDistance: 89,
     signalPingThreshold: 0.62
   },
   batteries: {
@@ -4938,7 +4938,7 @@ function drawOverchargeAura(agent) {
 }
 
 function drawProximityWarning(agent) {
-  if (playerRole !== "Investigator") {
+  if (playerRole !== "Investigator" || agent !== state.player) {
     return;
   }
   const level = getAnomalyProximityWarning(agent);
@@ -4949,8 +4949,8 @@ function drawProximityWarning(agent) {
   const pulse = Math.sin(performance.now() * (critical ? 0.014 : 0.009)) * 0.5 + 0.5;
   const y = agent.y - investigatorVisual.nameplateOffset - 22 - pulse * 3;
   ctx.save();
-  ctx.globalAlpha = critical ? 0.92 : 0.78;
-  ctx.fillStyle = critical ? "rgba(231, 111, 138, 0.9)" : "rgba(244, 179, 93, 0.88)";
+  ctx.globalAlpha = critical ? 0.68 : 0.52;
+  ctx.fillStyle = critical ? "rgba(231, 111, 138, 0.72)" : "rgba(244, 179, 93, 0.66)";
   ctx.strokeStyle = "#f8fbfd";
   ctx.lineWidth = 1.8;
   ctx.shadowColor = critical ? "#e76f8a" : "#f4b35d";
