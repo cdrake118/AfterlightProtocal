@@ -3829,7 +3829,7 @@ function getActorOcclusionDepthY(actor, bounds = getActorVisualBounds(actor)) {
     return actor.y;
   }
   if (actor === state.anomaly) {
-    return bounds.y + bounds.h;
+    return actor.y + (actor.radius ?? 0);
   }
   return actor.y + (actor.radius ?? 0);
 }
