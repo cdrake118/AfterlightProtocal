@@ -134,6 +134,8 @@ let audioUnlockPending = false;
 const audioBuffers = new Map();
 const audioBufferPromises = new Map();
 const missingAudioAssets = new Set();
+const activeLoopingSounds = new Map();
+let loopingSoundRequestId = 0;
 let currentMusicSource = null;
 let currentMusicGain = null;
 let currentMusicTrackSrc = "";
@@ -147,7 +149,6 @@ const audioVolumes = {
 loadGlobalSoundEffects();
 let lastHitSound = 0;
 let lastGhostDamageSound = 0;
-let lastGhostEscapeSound = 0;
 let currentMapName = "Observatory Annex";
 let matchDuration = 300;
 let botPressure = "standard";
@@ -711,7 +712,7 @@ function makeAgent(x, y, color, name) {
     lightOn: false,
     lastLightOn: false,
     reviveProgress: 0,
-    reviveSoundCooldown: 0,
+    reviveSoundActive: false,
     color,
     name,
     ai: false,
@@ -766,6 +767,7 @@ function makeAnomaly() {
 
 function resetMatch() {
   stopMapMusic();
+  stopAllLoopingSounds();
   loadMap(currentMapName);
   setMatchSeed(replaySeed ?? createMatchSeed());
   const map = maps[currentMapName] ?? maps["Observatory Annex"];
@@ -933,6 +935,7 @@ function beginMatch() {
 function endMatch(text) {
   state.phase = "ended";
   stopMapMusic();
+  stopAllLoopingSounds();
   playMapSoundCue("round_outro");
   state.stats.outcome = text;
   const summary = makeRoundSummary(text);
@@ -1941,12 +1944,13 @@ function updateAnomalyStateTimers(dt) {
   }
 
   anomaly.escapeTimer = Math.max(0, (anomaly.escapeTimer ?? 0) - dt);
-  if (anomaly.escapeTimer > 0 && visualChance(dt * 15)) {
-    trailSmoke(anomaly.x, anomaly.y, "#b8c8d2", 1);
-  }
-  if (anomaly.escapeTimer > 0 && performance.now() - lastGhostEscapeSound > 780) {
-    lastGhostEscapeSound = performance.now();
-    playSound("ghost_escape_loop");
+  if (anomaly.escapeTimer > 0) {
+    if (visualChance(dt * 15)) {
+      trailSmoke(anomaly.x, anomaly.y, "#b8c8d2", 1);
+    }
+    startLoopingSound("ghost_escape_loop", "ghost_escape_loop");
+  } else {
+    stopLoopingSound("ghost_escape_loop");
   }
 }
 
@@ -2086,12 +2090,12 @@ function spawnComebackBattery() {
 
 function resolveRevives(dt) {
   for (const agent of getInvestigators()) {
+    agent.reviveSoundActive = false;
     if (agent.resolve > 0) {
       agent.reviveProgress = 0;
-      agent.reviveSoundCooldown = 0;
+      stopLoopingSound(getReviveLoopKey(agent));
       continue;
     }
-    agent.reviveSoundCooldown = Math.max(0, (agent.reviveSoundCooldown ?? 0) - dt);
     agent.reviveProgress = Math.max(0, agent.reviveProgress - dt * 0.18);
   }
 
@@ -2116,6 +2120,12 @@ function resolveRevives(dt) {
       advanceRevive(target, dt * 0.55 * getReviveRate(helper), helper);
     }
   }
+
+  for (const agent of getInvestigators()) {
+    if (!agent.reviveSoundActive) {
+      stopLoopingSound(getReviveLoopKey(agent));
+    }
+  }
 }
 
 function getReviveRate(helper) {
@@ -2123,14 +2133,13 @@ function getReviveRate(helper) {
 }
 
 function advanceRevive(target, amount, helper) {
-  if ((target.reviveSoundCooldown ?? 0) <= 0) {
-    playSound("revive_progress");
-    target.reviveSoundCooldown = 0.65;
-  }
+  target.reviveSoundActive = true;
+  startLoopingSound(getReviveLoopKey(target), "revive_progress");
   target.reviveProgress += amount;
   createRing(target.x, target.y, "#7ae4d6", 52, 0.32);
   if (target.reviveProgress >= reviveSeconds) {
     recordReviveEvent(target, helper);
+    stopLoopingSound(getReviveLoopKey(target));
     target.resolve = 44;
     target.battery = Math.max(target.battery, maxBatteryCapacity * 0.35);
     target.reviveProgress = 0;
@@ -2142,6 +2151,14 @@ function advanceRevive(target, amount, helper) {
     burst(target.x, target.y, "#7ae4d6", 28);
     setStatus(`${target.name} revived`);
   }
+}
+
+function getReviveLoopKey(agent) {
+  if (agent === state.player) {
+    return "revive:player";
+  }
+  const index = state.investigators.indexOf(agent);
+  return `revive:${index}`;
 }
 
 function recordTelemetry(bucket, entry, limit = 80) {
@@ -6451,6 +6468,7 @@ function toggleSound() {
     }
   } else {
     stopMapMusic();
+    stopAllLoopingSounds();
     setStatus("Sound off");
   }
 }
@@ -6665,79 +6683,66 @@ function ensureAudio() {
 
 function playSound(type) {
   if (!soundEnabled) {
-    return;
+    return 0;
   }
   if (!ensureAudio()) {
-    return;
+    return 0;
   }
   if (playMapSoundEffect(type)) {
-    return;
+    return 0;
   }
   if (playManifestSound(type)) {
-    return;
+    return 0;
   }
+  return playGeneratedSound(type);
+}
+
+function playGeneratedSound(type) {
   const now = audioContext.currentTime;
   if (type === "flashlight_on") {
     playClickSound(now, 860, 1280, 0.04, 0.075);
-    return;
+    return 0.075;
   }
   if (type === "audio_test") {
     playTone({ frequency: 440, endFrequency: 440, duration: 0.12, wave: "sine", volume: 0.14, startTime: now });
     playTone({ frequency: 660, endFrequency: 660, duration: 0.12, wave: "sine", volume: 0.14, startTime: now + 0.16 });
     playTone({ frequency: 880, endFrequency: 880, duration: 0.16, wave: "triangle", volume: 0.16, startTime: now + 0.32 });
-    return;
+    return 0.48;
   }
   if (type === "flashlight_off") {
     playClickSound(now, 560, 230, 0.036, 0.055);
-    return;
+    return 0.055;
   }
   if (type === "ghost_grab") {
     playTone({ frequency: 112, endFrequency: 58, duration: 0.2, wave: "sawtooth", volume: 0.09, startTime: now });
     playTone({ frequency: 620, endFrequency: 280, duration: 0.14, wave: "square", volume: 0.042, startTime: now + 0.025 });
     playNoise({ startTime: now, duration: 0.18, volume: 0.075, highpass: 260, lowpass: 1800 });
-    return;
+    return 0.2;
   }
   if (type === "ghost_shock") {
     playTone({ frequency: 1240, endFrequency: 460, duration: 0.24, wave: "square", volume: 0.085, startTime: now });
     playTone({ frequency: 740, endFrequency: 1480, duration: 0.12, wave: "sawtooth", volume: 0.044, startTime: now + 0.03 });
     playNoise({ startTime: now, duration: 0.22, volume: 0.07, highpass: 820, lowpass: 4200 });
-    return;
+    return 0.24;
   }
   if (type === "ghost_escape") {
     playTone({ frequency: 260, endFrequency: 92, duration: 0.44, wave: "triangle", volume: 0.065, startTime: now });
     playNoise({ startTime: now, duration: 0.5, volume: 0.078, highpass: 90, lowpass: 1200, fadeIn: 0.04 });
-    return;
+    return 0.5;
   }
   if (type === "ghost_escape_loop") {
     playTone({ frequency: 180, endFrequency: 96, duration: 0.34, wave: "triangle", volume: 0.042, startTime: now });
     playNoise({ startTime: now, duration: 0.36, volume: 0.045, highpass: 120, lowpass: 900, fadeIn: 0.035 });
-    return;
+    return 0.36;
   }
   if (type === "ghost_damage") {
     playTone({ frequency: 920 + visualRandom() * 120, endFrequency: 540, duration: 0.105, wave: "sawtooth", volume: 0.036, startTime: now });
     playNoise({ startTime: now, duration: 0.11, volume: 0.03, highpass: 900, lowpass: 3600 });
-    return;
+    return 0.11;
   }
   const osc = audioContext.createOscillator();
   const gain = audioContext.createGain();
-  const settings = {
-    start: [220, 0.13, "sine", 0.08],
-    ability: [620, 0.18, "triangle", 0.08],
-    blackout: [96, 0.28, "sawtooth", 0.08],
-    dash: [330, 0.06, "triangle", 0.045],
-    relay: [520, 0.32, "sine", 0.08],
-    signal: [260, 0.055, "sine", 0.04],
-    lightning: [1180, 0.22, "sawtooth", 0.07],
-    revive_progress: [420, 0.18, "triangle", 0.045],
-    revive: [680, 0.26, "triangle", 0.08],
-    downed: [190, 0.22, "sawtooth", 0.07],
-    battery_spawn: [980, 0.16, "triangle", 0.06],
-    pickup: [760, 0.1, "sine", 0.075],
-    hit: [440, 0.045, "square", 0.05],
-    win: [520, 0.34, "triangle", 0.09],
-    lose: [132, 0.38, "sawtooth", 0.085]
-  }[type] ?? [260, 0.1, "sine", 0.02];
-  const [frequency, duration, wave, volume] = settings;
+  const [frequency, duration, wave, volume] = getGeneratedSoundSettings(type);
   osc.type = wave;
   osc.frequency.setValueAtTime(frequency, now);
   if (type === "win") {
@@ -6755,6 +6760,27 @@ function playSound(type) {
   osc.connect(gain).connect(getAudioDestination("sfx"));
   osc.start(now);
   osc.stop(now + duration + 0.02);
+  return duration;
+}
+
+function getGeneratedSoundSettings(type) {
+  return {
+    start: [220, 0.13, "sine", 0.08],
+    ability: [620, 0.18, "triangle", 0.08],
+    blackout: [96, 0.28, "sawtooth", 0.08],
+    dash: [330, 0.06, "triangle", 0.045],
+    relay: [520, 0.32, "sine", 0.08],
+    signal: [260, 0.055, "sine", 0.04],
+    lightning: [1180, 0.22, "sawtooth", 0.07],
+    revive_progress: [420, 0.18, "triangle", 0.045],
+    revive: [680, 0.26, "triangle", 0.08],
+    downed: [190, 0.22, "sawtooth", 0.07],
+    battery_spawn: [980, 0.16, "triangle", 0.06],
+    pickup: [760, 0.1, "sine", 0.075],
+    hit: [440, 0.045, "square", 0.05],
+    win: [520, 0.34, "triangle", 0.09],
+    lose: [132, 0.38, "sawtooth", 0.085]
+  }[type] ?? [260, 0.1, "sine", 0.02];
 }
 
 function playMapSoundCue(type) {
@@ -6768,7 +6794,7 @@ function playMapSoundEffect(type) {
   if (!globalSoundEffects && !globalSoundEffectsPromise) {
     loadGlobalSoundEffects();
   }
-  const entry = globalSoundEffects?.[type] ?? maps[currentMapName]?.soundEffects?.[type];
+  const entry = getSoundEffectEntry(type);
   if (!entry?.src || missingAudioAssets.has(entry.src)) {
     return false;
   }
@@ -6785,6 +6811,121 @@ function playMapSoundEffect(type) {
   }
   playAudioBufferEntry(buffer, entry);
   return true;
+}
+
+function getSoundEffectEntry(type) {
+  return globalSoundEffects?.[type] ?? maps[currentMapName]?.soundEffects?.[type];
+}
+
+function startLoopingSound(key, type) {
+  if (!soundEnabled || !ensureAudio()) {
+    return;
+  }
+  const active = activeLoopingSounds.get(key);
+  if (active?.type === type) {
+    return;
+  }
+  stopLoopingSound(key);
+  const loopState = {
+    key,
+    type,
+    requestId: ++loopingSoundRequestId,
+    source: null,
+    gain: null,
+    fallbackTimer: 0
+  };
+  activeLoopingSounds.set(key, loopState);
+  if (startLoopingMapSoundEffect(loopState)) {
+    return;
+  }
+  if (!globalSoundEffects && globalSoundEffectsPromise) {
+    globalSoundEffectsPromise.finally(() => {
+      if (activeLoopingSounds.get(key) !== loopState || loopState.source || loopState.fallbackTimer) {
+        return;
+      }
+      if (!startLoopingMapSoundEffect(loopState)) {
+        startLoopingGeneratedSound(loopState);
+      }
+    });
+    return;
+  }
+  startLoopingGeneratedSound(loopState);
+}
+
+function startLoopingMapSoundEffect(loopState) {
+  const entry = getSoundEffectEntry(loopState.type);
+  if (!entry?.src || missingAudioAssets.has(entry.src)) {
+    return false;
+  }
+  const buffer = audioBuffers.get(entry.src);
+  if (!buffer) {
+    getDecodedAudioBuffer(entry.src)
+      .then((decoded) => {
+        if (activeLoopingSounds.get(loopState.key) === loopState) {
+          startLoopingAudioBufferEntry(decoded, entry, loopState);
+        }
+      })
+      .catch(() => {
+        if (activeLoopingSounds.get(loopState.key) === loopState) {
+          startLoopingGeneratedSound(loopState);
+        }
+      });
+    return true;
+  }
+  startLoopingAudioBufferEntry(buffer, entry, loopState);
+  return true;
+}
+
+function startLoopingAudioBufferEntry(buffer, entry, loopState) {
+  if (activeLoopingSounds.get(loopState.key) !== loopState || !soundEnabled) {
+    return;
+  }
+  const source = audioContext.createBufferSource();
+  const gain = audioContext.createGain();
+  source.buffer = buffer;
+  source.loop = true;
+  gain.gain.setValueAtTime(Number(entry.volume ?? 1), audioContext.currentTime);
+  source.connect(gain).connect(getAudioDestination(entry.bus ?? "sfx"));
+  source.start();
+  loopState.source = source;
+  loopState.gain = gain;
+}
+
+function startLoopingGeneratedSound(loopState) {
+  if (activeLoopingSounds.get(loopState.key) !== loopState || !soundEnabled || !ensureAudio()) {
+    return;
+  }
+  const duration = Math.max(0.08, playGeneratedSound(loopState.type) || 0.12);
+  loopState.fallbackTimer = window.setTimeout(() => {
+    loopState.fallbackTimer = 0;
+    startLoopingGeneratedSound(loopState);
+  }, Math.max(80, Math.round(duration * 1000)));
+}
+
+function stopLoopingSound(key) {
+  const loopState = activeLoopingSounds.get(key);
+  if (!loopState) {
+    return;
+  }
+  activeLoopingSounds.delete(key);
+  if (loopState.fallbackTimer) {
+    window.clearTimeout(loopState.fallbackTimer);
+  }
+  if (loopState.source) {
+    try {
+      loopState.source.stop();
+    } catch {
+      // Source may already be stopped.
+    }
+    loopState.source.disconnect?.();
+  }
+  loopState.gain?.disconnect?.();
+}
+
+function stopAllLoopingSounds() {
+  for (const key of [...activeLoopingSounds.keys()]) {
+    stopLoopingSound(key);
+  }
 }
 
 function playClickSound(now, startFrequency, endFrequency, duration, volume) {
