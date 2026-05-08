@@ -165,6 +165,7 @@ let lastRoundSummary = null;
 let lastFeedbackEntry = null;
 let blackoutMask = null;
 let batterySpawnTimer = 30;
+let builderPlaytestOptions = { freezeAnomaly: false };
 const recentNetworkEvents = [];
 
 const GameBalance = {
@@ -593,6 +594,7 @@ const maps = {
 
 const builderPlaytestMapName = "Builder Playtest";
 const builderPlaytestMapKey = "afterlight-playtest-map";
+const builderPlaytestOptionsKey = "afterlight-playtest-options";
 maps[builderPlaytestMapName] = {
   ...maps["Gloamhall Manor Compact"],
   labels: maps["Gloamhall Manor Compact"].labels.map((label) => [...label]),
@@ -798,6 +800,9 @@ function resetMatch() {
 function loadMap(name) {
   installBuilderPlaytestMap();
   currentMapName = maps[name] ? name : "Observatory Annex";
+  builderPlaytestOptions = currentMapName === builderPlaytestMapName
+    ? loadBuilderPlaytestOptions()
+    : { freezeAnomaly: false };
   const map = maps[currentMapName];
   walls = map.walls.map((wall) => ({ ...wall }));
   props = map.props.map((prop) => ({ ...prop }));
@@ -807,6 +812,17 @@ function loadMap(name) {
   mapOccluders = (map.occluders ?? []).map((occluder) => ({ ...occluder }));
   roomLabels = map.labels.map((label) => [...label]);
   floorColors = [...map.floor];
+}
+
+function loadBuilderPlaytestOptions() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(builderPlaytestOptionsKey) ?? "{}");
+    return {
+      freezeAnomaly: Boolean(parsed?.freezeAnomaly)
+    };
+  } catch {
+    return { freezeAnomaly: false };
+  }
 }
 
 function installBuilderPlaytestMap() {
@@ -1078,6 +1094,10 @@ function controlAnomaly(anomaly, dt) {
     touchInvestigators(dt);
     return;
   }
+  if (isPlaytestAnomalyFrozen()) {
+    holdAnomalyStill(anomaly, dt);
+    return;
+  }
   const movement = getAnomalyMovementVector(anomaly, readMovement());
   const speed = anomaly.speed * getAnomalySpeedMultiplier(anomaly) * (anomaly.dash > 0 ? 2.15 : 1);
   if (Math.hypot(movement.x, movement.y) > 0.08) {
@@ -1153,6 +1173,10 @@ function controlAnomalyFromInput(anomaly, input, dt) {
     touchInvestigators(dt);
     return;
   }
+  if (isPlaytestAnomalyFrozen()) {
+    holdAnomalyStill(anomaly, dt);
+    return;
+  }
   if (input.dash) {
     triggerDashForActor(anomaly, "Anomaly");
   }
@@ -1214,6 +1238,19 @@ function getAnomalyEscapeDirection(anomaly) {
   return { x: x / len, y: y / len };
 }
 
+function isPlaytestAnomalyFrozen() {
+  return currentMapName === builderPlaytestMapName && builderPlaytestOptions.freezeAnomaly;
+}
+
+function holdAnomalyStill(anomaly, dt) {
+  anomaly.vx = 0;
+  anomaly.vy = 0;
+  anomaly.dash = 0;
+  updateDash(anomaly, dt);
+  updateCarriedInvestigatorPosition();
+  touchInvestigators(dt);
+}
+
 function updateAiAnomaly(dt) {
   const anomaly = state.anomaly;
   if (anomaly.shockTimer > 0) {
@@ -1221,6 +1258,10 @@ function updateAiAnomaly(dt) {
     anomaly.vy = 0;
     revealAnomaly(1);
     touchInvestigators(dt);
+    return;
+  }
+  if (isPlaytestAnomalyFrozen()) {
+    holdAnomalyStill(anomaly, dt);
     return;
   }
   const tuning = getBotTuning();

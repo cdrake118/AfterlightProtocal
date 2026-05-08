@@ -306,6 +306,24 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
 }
 
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: #dff7ff;
+  font-size: 12px;
+  font-weight: 900;
+  user-select: none;
+}
+
+.check-field input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
+  accent-color: #7ae4d6;
+}
+
 .sound-menu {
   display: grid;
   gap: 10px;

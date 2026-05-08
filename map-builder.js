@@ -19,6 +19,7 @@ const savedMapsKey = "afterlight-map-builder-saves";
 const lastLoadedMapKey = "afterlight-map-builder-last-loaded";
 const assetTrayKey = "afterlight-map-builder-assets";
 const playtestMapKey = "afterlight-playtest-map";
+const playtestOptionsKey = "afterlight-playtest-options";
 const historyLimit = 50;
 
 const defaultEvent = {
@@ -107,6 +108,7 @@ const validationSummary = document.querySelector("#validationSummary");
 const validationList = document.querySelector("#validationList");
 const exportOutput = document.querySelector("#exportOutput");
 const importFile = document.querySelector("#importFile");
+const playtestFreezeAnomaly = document.querySelector("#playtestFreezeAnomaly");
 const backgroundFile = document.querySelector("#backgroundFile");
 const foregroundFile = document.querySelector("#foregroundFile");
 const decorationFile = document.querySelector("#decorationFile");
@@ -150,6 +152,7 @@ const inspector = {
 
 wireControls();
 const restoredLastMap = restoreLastLoadedMap();
+syncPlaytestOptionsForm();
 syncForm();
 updateExport();
 validateMap();
@@ -198,6 +201,7 @@ function wireControls() {
   document.querySelector("#pasteComponentBtn").addEventListener("click", pasteComponent);
   document.querySelector("#analysisBtn").addEventListener("click", toggleAnalysisOverlay);
   document.querySelector("#playtestBtn").addEventListener("click", playtestMap);
+  playtestFreezeAnomaly.addEventListener("change", savePlaytestOptions);
   document.querySelector("#fitBtn").addEventListener("click", draw);
   document.querySelector("#exportGameBtn").addEventListener("click", () => setExportMode("game"));
   document.querySelector("#exportTiledBtn").addEventListener("click", () => setExportMode("tiled"));
@@ -2944,10 +2948,35 @@ function toggleAnalysisOverlay() {
   markStatus(analysisOverlay ? "QA overlay on" : "QA overlay off");
 }
 
+function getPlaytestOptions() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(playtestOptionsKey) ?? "{}");
+    return {
+      freezeAnomaly: Boolean(parsed?.freezeAnomaly)
+    };
+  } catch {
+    return { freezeAnomaly: false };
+  }
+}
+
+function syncPlaytestOptionsForm() {
+  const options = getPlaytestOptions();
+  playtestFreezeAnomaly.checked = options.freezeAnomaly;
+}
+
+function savePlaytestOptions() {
+  const options = {
+    freezeAnomaly: playtestFreezeAnomaly.checked
+  };
+  localStorage.setItem(playtestOptionsKey, JSON.stringify(options));
+  return options;
+}
+
 async function playtestMap() {
   try {
+    const options = savePlaytestOptions();
     localStorage.setItem(playtestMapKey, JSON.stringify(await compactMapForStorage(toGameMap())));
-    markStatus("Playtest map published");
+    markStatus(options.freezeAnomaly ? "Playtest map published, anomaly frozen" : "Playtest map published");
     window.location.href = "/host?map=Builder%20Playtest";
   } catch (error) {
     markStatus(`Playtest failed: ${friendlyStorageError(error)}`);
