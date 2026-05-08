@@ -3821,7 +3821,17 @@ function drawOcclusionOverlays() {
 function actorBehindOccluder(actor, occluder) {
   const depthY = Number(occluder.depthY ?? occluder.y + occluder.h);
   const bounds = getActorVisualBounds(actor);
-  return actor.y < depthY && boundsOverlap(bounds, occluder);
+  return getActorOcclusionDepthY(actor, bounds) < depthY && boundsOverlap(bounds, occluder);
+}
+
+function getActorOcclusionDepthY(actor, bounds = getActorVisualBounds(actor)) {
+  if (typeof actor?.resolve === "number" && typeof actor?.battery === "number") {
+    return actor.y;
+  }
+  if (actor === state.anomaly) {
+    return bounds.y + bounds.h;
+  }
+  return actor.y + (actor.radius ?? 0);
 }
 
 function getActorVisualBounds(actor) {

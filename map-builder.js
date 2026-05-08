@@ -1099,7 +1099,14 @@ function writeSelection(ref, next) {
   if (ref.kind === "decoration") map.decorations[ref.index] = normalizeImageRect({ ...map.decorations[ref.index], ...next, x, y });
   if (ref.kind === "background") map.backgroundImage = normalizeImageRect({ ...map.backgroundImage, ...next, x, y });
   if (ref.kind === "foreground") map.foregroundImage = normalizeImageRect({ ...map.foregroundImage, ...next, x, y });
-  if (ref.kind === "occluder") map.occluders[ref.index] = normalizeOccluder({ ...map.occluders[ref.index], ...next, x, y });
+  if (ref.kind === "occluder") {
+    const existing = map.occluders[ref.index];
+    const existingDepthY = existing.depthY ?? existing.y + existing.h;
+    const incomingDepthY = Number(next.depthY);
+    const depthMoved = Number.isFinite(incomingDepthY) && Math.round(incomingDepthY) !== Math.round(existingDepthY);
+    const depthY = depthMoved ? incomingDepthY : existingDepthY + (y - Math.round(existing.y ?? 0));
+    map.occluders[ref.index] = normalizeOccluder({ ...existing, ...next, x, y, depthY });
+  }
   if (ref.kind === "player") map.player = [x, y];
   if (ref.kind === "anomaly") map.anomaly = [x, y];
   if (ref.kind === "investigator") {
@@ -1282,10 +1289,20 @@ function hitResizeHandle(point) {
   if (selected?.kind === "wall" && isSegmentWall(object)) {
     return getResizeHandles(object).find((handle) => distance(point, handle) <= wallAnchorHitRadius)?.name ?? null;
   }
+  if (selected?.kind === "occluder" && hitOccluderDepthLine(point, object)) {
+    return "depth";
+  }
   const edge = hitResizeEdge(point, object);
   if (edge) return edge;
   const corners = getResizeHandles(object).filter((handle) => handle.type === "corner");
   return corners.find((handle) => distance(point, handle) <= resizeCornerHitRadius)?.name ?? null;
+}
+
+function hitOccluderDepthLine(point, occluder) {
+  const depthY = occluder.depthY ?? occluder.y + occluder.h;
+  return point.x >= occluder.x
+    && point.x <= occluder.x + occluder.w
+    && Math.abs(point.y - depthY) <= resizeEdgeHitPadding;
 }
 
 function hitResizeEdge(point, rect) {
@@ -1327,6 +1344,7 @@ function getResizeHandles(rect) {
 
 function resizeCursor(handle) {
   if (handle === "start" || handle === "end") return "crosshair";
+  if (handle === "depth") return "ns-resize";
   if (handle === "n" || handle === "s") return "ns-resize";
   if (handle === "e" || handle === "w") return "ew-resize";
   if (handle === "nw" || handle === "se") return "nwse-resize";
@@ -1342,6 +1360,14 @@ function resizeSelection(point) {
     writeSelection(selected, pointer.handle === "start"
       ? { ...original, x: point.x, y: point.y, x2: original.x2, y2: original.y2 }
       : { ...original, x: original.x, y: original.y, x2: point.x, y2: point.y });
+    updateExport();
+    return;
+  }
+  if (selected?.kind === "occluder" && pointer.handle === "depth") {
+    writeSelection(selected, {
+      ...original,
+      depthY: clamp(Math.round(point.y), original.y, original.y + original.h)
+    });
     updateExport();
     return;
   }
