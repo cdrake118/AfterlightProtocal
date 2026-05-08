@@ -236,6 +236,11 @@ button:focus-visible,
   color: #dff7ff;
 }
 
+.field input[type="range"] {
+  min-height: 26px;
+  padding: 0;
+}
+
 .field-row,
 .color-row {
   display: grid;
@@ -304,6 +309,18 @@ textarea {
 
 .compact-actions {
   grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+}
+
+.front-edge-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+.front-edge-controls button {
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 11px;
 }
 
 .check-field {

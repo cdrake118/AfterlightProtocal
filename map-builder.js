@@ -10,7 +10,7 @@ const resizeCornerHitRadius = 8;
 const resizeEdgeHandleLength = 34;
 const resizeIntentThreshold = 6;
 const resizeIntentRatio = 1.35;
-const occluderDepthHitPadding = 20;
+const occluderDepthHitPadding = 28;
 const defaultWallThickness = 24;
 const defaultBarrierThickness = 1;
 const defaultOccluderThickness = 96;
@@ -142,6 +142,8 @@ const inspector = {
   w: document.querySelector("#objectW"),
   h: document.querySelector("#objectH"),
   depthY: document.querySelector("#objectDepthY"),
+  depthYRange: document.querySelector("#objectDepthYRange"),
+  frontEdgeValue: document.querySelector("#frontEdgeValue"),
   name: document.querySelector("#objectName"),
   color: document.querySelector("#objectColor"),
   opacity: document.querySelector("#objectOpacity"),
@@ -282,8 +284,14 @@ function wireControls() {
   canvas.addEventListener("pointerup", handlePointerUp);
   canvas.addEventListener("pointerleave", handlePointerUp);
 
-  ["x", "y", "w", "h", "depthY", "name", "color", "opacity", "rotation"].forEach((key) => {
+  ["x", "y", "w", "h", "depthY", "depthYRange", "name", "color", "opacity", "rotation"].forEach((key) => {
     inspector[key].addEventListener("input", () => updateSelectedFromInspector(key));
+  });
+  document.querySelectorAll("[data-front-edge]").forEach((button) => {
+    button.addEventListener("click", () => setSelectedOccluderFrontEdge(button.dataset.frontEdge));
+  });
+  document.querySelectorAll("[data-front-edge-nudge]").forEach((button) => {
+    button.addEventListener("click", () => nudgeSelectedOccluderFrontEdge(Number(button.dataset.frontEdgeNudge)));
   });
 
   window.addEventListener("keydown", (event) => {
@@ -864,6 +872,9 @@ function handlePointerUp() {
       target.push(object);
       setSelection({ kind: pointer.kind === "barrier" ? "wall" : pointer.kind, index: target.length - 1 });
       changed(true, true);
+      if (pointer.kind === "occluder") {
+        markStatus("Occluder added. Drag Front Edge or tune it in Inspector");
+      }
     }
   }
   if (pointer?.mode === "marquee") {
@@ -1463,13 +1474,49 @@ function updateSelectedFromInspector(key) {
   if (!selected || selectedGroup.length > 1) return;
   const current = readSelection(selected);
   const next = { ...current };
-  if (["x", "y", "w", "h", "depthY", "opacity", "rotation"].includes(key)) {
+  if (key === "depthYRange") {
+    next.depthY = Number(inspector.depthYRange.value);
+  } else if (["x", "y", "w", "h", "depthY", "opacity", "rotation"].includes(key)) {
     next[key] = Number(inspector[key].value);
   } else {
     next[key] = inspector[key].value;
   }
   writeSelection(selected, next);
   changed(false, false);
+  if (key === "depthY" || key === "depthYRange" || key === "y" || key === "h") {
+    syncInspector();
+  }
+  draw();
+}
+
+function setSelectedOccluderFrontEdge(position) {
+  const occluder = selected?.kind === "occluder" ? readSelection(selected) : null;
+  if (!occluder || isSegmentWall(occluder)) return;
+  const values = {
+    top: occluder.y,
+    middle: occluder.y + occluder.h / 2,
+    bottom: occluder.y + occluder.h
+  };
+  setOccluderFrontEdge(values[position] ?? values.middle);
+  markStatus(`Front Edge set to ${titleCase(position)}`);
+}
+
+function nudgeSelectedOccluderFrontEdge(delta) {
+  const occluder = selected?.kind === "occluder" ? readSelection(selected) : null;
+  if (!occluder || isSegmentWall(occluder) || !Number.isFinite(delta)) return;
+  setOccluderFrontEdge((occluder.depthY ?? occluder.y + occluder.h) + delta);
+  markStatus(`Front Edge nudged ${delta > 0 ? "+" : ""}${delta}`);
+}
+
+function setOccluderFrontEdge(depthY) {
+  const occluder = selected?.kind === "occluder" ? readSelection(selected) : null;
+  if (!occluder || isSegmentWall(occluder)) return;
+  writeSelection(selected, {
+    ...occluder,
+    depthY: clamp(Math.round(Number(depthY)), occluder.y, occluder.y + occluder.h)
+  });
+  changed(false, false);
+  syncInspector();
   draw();
 }
 
@@ -1719,10 +1766,18 @@ function drawOccluder(occluder, selectedState) {
   ctx.strokeStyle = selectedState ? "#fff4cf" : "#c7a8ff";
   ctx.lineWidth = selectedState ? 5 : 2;
   ctx.setLineDash(selectedState ? [] : [14, 8]);
+  const depthY = occluder.depthY ?? occluder.y + occluder.h;
   ctx.fillRect(occluder.x, occluder.y, occluder.w, occluder.h);
+  if (selectedState) {
+    const topHeight = Math.max(0, depthY - occluder.y);
+    const bottomY = clamp(depthY, occluder.y, occluder.y + occluder.h);
+    ctx.fillStyle = "rgba(199,168,255,0.22)";
+    ctx.fillRect(occluder.x, occluder.y, occluder.w, topHeight);
+    ctx.fillStyle = "rgba(122,228,214,0.08)";
+    ctx.fillRect(occluder.x, bottomY, occluder.w, occluder.y + occluder.h - bottomY);
+  }
   ctx.strokeRect(occluder.x, occluder.y, occluder.w, occluder.h);
   ctx.setLineDash([]);
-  const depthY = occluder.depthY ?? occluder.y + occluder.h;
   ctx.strokeStyle = selectedState ? "#fff4cf" : "rgba(255,244,207,0.86)";
   ctx.lineWidth = selectedState ? 4 : 2;
   ctx.beginPath();
@@ -1738,7 +1793,13 @@ function drawOccluder(occluder, selectedState) {
   ctx.fillStyle = "#f8fbfd";
   ctx.font = "900 10px Inter, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("OCCLUDER", occluder.x + occluder.w / 2, Math.max(occluder.y + 14, depthY - 7));
+  ctx.fillText(selectedState ? "FRONT EDGE" : "OCCLUDER", occluder.x + occluder.w / 2, Math.max(occluder.y + 14, depthY - 7));
+  if (selectedState && occluder.h >= 52) {
+    ctx.fillStyle = "rgba(248,251,253,0.72)";
+    ctx.font = "800 9px Inter, sans-serif";
+    if (depthY - occluder.y > 22) ctx.fillText("COVERED", occluder.x + occluder.w / 2, occluder.y + 16);
+    if (occluder.y + occluder.h - depthY > 22) ctx.fillText("IN FRONT", occluder.x + occluder.w / 2, occluder.y + occluder.h - 10);
+  }
   ctx.restore();
 }
 
@@ -1893,9 +1954,16 @@ function syncInspector() {
   inspector.y.value = Math.round(object.y);
   inspector.w.value = Math.round(object.w ?? 0);
   inspector.h.value = Math.round(object.h ?? 0);
-  inspector.depthY.value = Math.round(object.depthY ?? object.y + (object.h ?? 0));
-  inspector.depthY.min = Math.round(object.y ?? 0);
-  inspector.depthY.max = Math.round((object.y ?? 0) + (object.h ?? 0));
+  const depthY = Math.round(object.depthY ?? object.y + (object.h ?? 0));
+  const depthMin = Math.round(object.y ?? 0);
+  const depthMax = Math.round((object.y ?? 0) + (object.h ?? 0));
+  inspector.depthY.value = depthY;
+  inspector.depthY.min = depthMin;
+  inspector.depthY.max = depthMax;
+  inspector.depthYRange.value = depthY;
+  inspector.depthYRange.min = depthMin;
+  inspector.depthYRange.max = depthMax;
+  inspector.frontEdgeValue.textContent = `y ${depthY}`;
   inspector.name.value = object.name ?? "";
   inspector.color.value = object.color ?? "#7ae4d6";
   inspector.opacity.value = object.opacity ?? 1;
