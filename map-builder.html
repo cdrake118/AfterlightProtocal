@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Afterlight Protocol | Map Builder</title>
-    <link rel="stylesheet" href="map-builder.css?v=20260507-01">
-    <script src="map-builder.js?v=20260507-01" defer></script>
+    <link rel="stylesheet" href="map-builder.css?v=20260507-02">
+    <script src="map-builder.js?v=20260507-02" defer></script>
   </head>
   <body>
     <main class="builder-shell">
@@ -17,6 +17,7 @@
         <nav class="builder-nav" aria-label="Builder navigation">
           <a href="guide.html">Guide</a>
           <a href="/host">Host</a>
+          <a href="sound-effects.html">Sound Effects</a>
           <a href="docs/MAP_PIPELINE.md">Pipeline</a>
         </nav>
       </header>
@@ -144,26 +145,11 @@
               <span>Music Volume <strong id="musicVolumeValue">100%</strong></span>
               <input id="mapMusicVolume" type="range" min="0" max="1" step="0.05" value="1">
             </label>
-            <div class="sound-menu">
-              <p class="section-title">Sound Effects</p>
-              <div class="action-grid compact-actions">
-                <button id="soundEffectUploadBtn" type="button">Upload Audio</button>
-                <button id="refreshSoundEffectsBtn" type="button">Refresh</button>
-                <button id="deleteSoundEffectBtn" class="danger-button" type="button">Remove</button>
-              </div>
-              <label class="field">
-                <span>Sound Library</span>
-                <select id="soundEffectLibrarySelect"></select>
-              </label>
-              <div id="soundEffectsStatus" class="muted">No sound effects assigned</div>
-              <div id="soundEffectsList" class="sound-effects-list" aria-label="Sound effect assignments"></div>
-            </div>
             <div id="assetTray" class="asset-tray" aria-label="Uploaded prop image tray"></div>
             <input id="backgroundFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
             <input id="foregroundFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
             <input id="decorationFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>
             <input id="musicFile" type="file" accept="audio/mpeg,audio/mp3,.mp3" hidden>
-            <input id="soundEffectFile" type="file" accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav,.mp3,.ogg,.wav" hidden>
           </div>
 
           <div class="panel-section">

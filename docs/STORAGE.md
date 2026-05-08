@@ -35,5 +35,6 @@ afterlight/
 - `GET /api/storage` reports the active storage root, directory layout, and file counts.
 - `GET /api/map-music`, `POST /api/map-music`, `DELETE /api/map-music/:filename` manage server music.
 - `GET /api/sound-effects`, `POST /api/sound-effects`, `DELETE /api/sound-effects/:filename` manage server sound effects.
+- `GET /api/sound-effects/config`, `PUT /api/sound-effects/config` manage global sound effect assignments.
 - `GET /api/map-images?kind=props`, `POST /api/map-images`, `DELETE /api/map-images/:kind/:filename` manage server images.
 - `GET /api/maps`, `POST /api/maps`, `GET /api/maps/:filename`, `DELETE /api/maps/:filename` manage published map JSON.

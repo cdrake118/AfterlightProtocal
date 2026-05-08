@@ -14,6 +14,7 @@ const storageRoot = resolve(process.env.AFTERLIGHT_STORAGE_DIR ?? (existsSync("/
 const storageDirs = makeStorageDirs(storageRoot);
 const mapMusicDir = resolve(process.env.MAP_MUSIC_DIR ?? storageDirs.music);
 const soundEffectsDir = resolve(process.env.MAP_SOUND_EFFECTS_DIR ?? storageDirs.sfx);
+const soundEffectsConfigFile = resolve(process.env.SOUND_EFFECTS_CONFIG_FILE ?? join(soundEffectsDir, "sound-effects.json"));
 const maxMapMusicUploadBytes = 12 * 1024 * 1024;
 const maxMapMusicRequestBytes = Math.ceil(maxMapMusicUploadBytes * 1.4) + 2048;
 const maxSoundEffectUploadBytes = 12 * 1024 * 1024;
@@ -37,6 +38,30 @@ const mimeTypes = {
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav"
 };
+
+const soundEffectEventIds = new Set([
+  "ghost_shock",
+  "ghost_damage",
+  "ghost_escape",
+  "ghost_escape_loop",
+  "ghost_grab",
+  "battery_spawn",
+  "pickup",
+  "round_intro",
+  "round_outro",
+  "flashlight_on",
+  "flashlight_off",
+  "revive",
+  "downed",
+  "blackout",
+  "dash",
+  "ability",
+  "relay",
+  "lightning",
+  "win",
+  "lose",
+  "hit"
+]);
 
 await ensureStorage();
 await appendStorageLog("storage:ready", {
@@ -102,6 +127,14 @@ const server = createServer(async (req, res) => {
     }
     if (requestUrl.pathname === "/api/sound-effects" && req.method === "POST") {
       sendJson(res, await saveSoundEffect(req), 201);
+      return;
+    }
+    if (requestUrl.pathname === "/api/sound-effects/config" && req.method === "GET") {
+      sendJson(res, await readSoundEffectsConfig());
+      return;
+    }
+    if (requestUrl.pathname === "/api/sound-effects/config" && req.method === "PUT") {
+      sendJson(res, await saveSoundEffectsConfig(req));
       return;
     }
     if (requestUrl.pathname.startsWith("/api/sound-effects/") && req.method === "DELETE") {
@@ -538,6 +571,7 @@ async function saveSoundEffect(req) {
 async function deleteSoundEffect(pathname) {
   const filename = sanitizeAudioFilename(decodeURIComponent(pathname.replace(/^\/api\/sound-effects\//, "")));
   if (!filename) throw httpError(400, "Choose a valid sound effect file.");
+  if (filename === "config") throw httpError(400, "Choose a valid sound effect file.");
   const filePath = resolveStoredFile(soundEffectsDir, filename);
   try {
     await unlink(filePath);
@@ -545,6 +579,7 @@ async function deleteSoundEffect(pathname) {
     if (error.code === "ENOENT") throw httpError(404, "Sound effect not found.");
     throw error;
   }
+  await removeSoundEffectAssignments(`/storage/audio/sfx/${filename}`);
   await appendStorageLog("sfx:delete", { filename });
   return { ok: true, deleted: filename };
 }
@@ -561,6 +596,68 @@ async function sendSoundEffectAsset(pathname, res) {
     return;
   }
   await sendFile(res, filePath);
+}
+
+async function readSoundEffectsConfig() {
+  await mkdir(soundEffectsDir, { recursive: true });
+  try {
+    const parsed = JSON.parse(await readFile(soundEffectsConfigFile, "utf8"));
+    return { ok: true, version: 1, soundEffects: normalizeSoundEffectsConfig(parsed.soundEffects ?? parsed) };
+  } catch (error) {
+    if (error.code === "ENOENT") return { ok: true, version: 1, soundEffects: {} };
+    throw error;
+  }
+}
+
+async function saveSoundEffectsConfig(req) {
+  const payload = await readJsonBody(req, maxMapDataBytes);
+  const soundEffects = normalizeSoundEffectsConfig(payload.soundEffects ?? payload);
+  await mkdir(soundEffectsDir, { recursive: true });
+  await writeFile(soundEffectsConfigFile, `${JSON.stringify({ version: 1, soundEffects }, null, 2)}\n`);
+  await appendStorageLog("sfx:config", { assignments: Object.keys(soundEffects).length });
+  return { ok: true, version: 1, soundEffects };
+}
+
+async function removeSoundEffectAssignments(src) {
+  const config = await readSoundEffectsConfig();
+  const soundEffects = { ...config.soundEffects };
+  let changed = false;
+  for (const [id, effect] of Object.entries(soundEffects)) {
+    if (effect?.src === src) {
+      delete soundEffects[id];
+      changed = true;
+    }
+  }
+  if (changed) {
+    await mkdir(soundEffectsDir, { recursive: true });
+    await writeFile(soundEffectsConfigFile, `${JSON.stringify({ version: 1, soundEffects }, null, 2)}\n`);
+  }
+}
+
+function normalizeSoundEffectsConfig(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.entries(value).reduce((next, [id, effect]) => {
+    if (!soundEffectEventIds.has(id)) return next;
+    const normalized = normalizeSoundEffectEntry(effect);
+    if (normalized) next[id] = normalized;
+    return next;
+  }, {});
+}
+
+function normalizeSoundEffectEntry(effect) {
+  const src = String(effect?.src ?? "");
+  if (!src.startsWith("/storage/audio/sfx/")) return null;
+  const filename = sanitizeAudioFilename(decodeURIComponent(src.replace(/^\/storage\/audio\/sfx\//, "")));
+  if (!filename) return null;
+  return {
+    name: sanitizeText(effect.name, filename.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "), 80),
+    src: `/storage/audio/sfx/${filename}`,
+    mimeType: mimeTypes[extname(filename).toLowerCase()] ?? "audio/mpeg",
+    size: Math.max(0, Number(effect.size ?? 0) || 0),
+    volume: clampNumber(effect.volume, 0, 1, 1),
+    bus: effect.bus === "music" ? "music" : "sfx",
+    loop: effect.loop === true
+  };
 }
 
 async function readJsonBody(req, maxBytes) {

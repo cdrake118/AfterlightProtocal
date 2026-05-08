@@ -129,6 +129,8 @@ let audioMusic = null;
 let audioSfx = null;
 let audioManifest = null;
 let audioManifestPromise = null;
+let globalSoundEffects = null;
+let globalSoundEffectsPromise = null;
 let audioUnlockPending = false;
 const audioBuffers = new Map();
 const audioBufferPromises = new Map();
@@ -142,6 +144,7 @@ const audioVolumes = {
   music: 0.72,
   sfx: 0.88
 };
+loadGlobalSoundEffects();
 let lastHitSound = 0;
 let lastGhostDamageSound = 0;
 let lastGhostEscapeSound = 0;
@@ -6462,6 +6465,7 @@ function ensureAudio() {
     audioSfx.connect(audioMaster);
     audioMaster.connect(audioContext.destination);
     loadAudioManifest();
+    loadGlobalSoundEffects();
   }
   if (audioContext.state === "suspended") {
     const resumeResult = audioContext.resume?.();
@@ -6581,7 +6585,10 @@ function playMapSoundCue(type) {
 }
 
 function playMapSoundEffect(type) {
-  const entry = maps[currentMapName]?.soundEffects?.[type];
+  if (!globalSoundEffects && !globalSoundEffectsPromise) {
+    loadGlobalSoundEffects();
+  }
+  const entry = globalSoundEffects?.[type] ?? maps[currentMapName]?.soundEffects?.[type];
   if (!entry?.src || missingAudioAssets.has(entry.src)) {
     return false;
   }
@@ -6620,6 +6627,23 @@ function loadAudioManifest() {
       return null;
     });
   return audioManifestPromise;
+}
+
+function loadGlobalSoundEffects() {
+  if (globalSoundEffects || globalSoundEffectsPromise) {
+    return globalSoundEffectsPromise;
+  }
+  globalSoundEffectsPromise = fetch("/api/sound-effects/config")
+    .then((response) => response.ok ? response.json() : null)
+    .then((payload) => {
+      globalSoundEffects = payload?.soundEffects && typeof payload.soundEffects === "object" ? payload.soundEffects : {};
+      return globalSoundEffects;
+    })
+    .catch(() => {
+      globalSoundEffects = {};
+      return globalSoundEffects;
+    });
+  return globalSoundEffectsPromise;
 }
 
 function playManifestSound(type) {

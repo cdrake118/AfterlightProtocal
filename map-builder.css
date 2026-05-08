@@ -273,6 +273,34 @@ textarea {
   padding-right: 2px;
 }
 
+.sound-effects-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(420px, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 0 12px 12px;
+}
+
+.sound-effects-page .builder-panel {
+  min-height: 0;
+}
+
+.sound-assignment-panel {
+  min-height: calc(100svh - 96px);
+}
+
+.sound-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.global-sound-list {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-height: none;
+}
+
 .sound-effect-row {
   display: grid;
   gap: 6px;
@@ -309,6 +337,16 @@ textarea {
 .sound-effect-row input[type="range"] {
   min-height: 24px;
   padding: 0;
+}
+
+@media (max-width: 860px) {
+  .sound-effects-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sound-assignment-panel {
+    min-height: 0;
+  }
 }
 
 .tool-button {

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Afterlight Protocol | Sound Effects</title>
+    <link rel="stylesheet" href="map-builder.css?v=20260507-02">
+    <script src="sound-effects.js?v=20260507-02" defer></script>
+  </head>
+  <body>
+    <main class="builder-shell sound-effects-page">
+      <header class="builder-header">
+        <div>
+          <p class="label">Afterlight Protocol</p>
+          <h1>Sound Effects</h1>
+        </div>
+        <nav class="builder-nav" aria-label="Sound effects navigation">
+          <a href="map-builder.html">Builder</a>
+          <a href="/host">Host</a>
+          <a href="guide.html">Guide</a>
+        </nav>
+      </header>
+
+      <section class="sound-effects-workspace" aria-label="Global sound effects">
+        <aside class="builder-panel sound-library-panel" aria-label="Sound library">
+          <div class="panel-section">
+            <p class="section-title">Library</p>
+            <div class="action-grid compact-actions">
+              <button id="uploadBtn" type="button">Upload</button>
+              <button id="refreshBtn" type="button">Refresh</button>
+              <button id="deleteBtn" class="danger-button" type="button">Remove</button>
+            </div>
+            <label class="field">
+              <span>Uploaded Audio</span>
+              <select id="librarySelect"></select>
+            </label>
+            <div id="libraryStatus" class="muted">Loading audio library</div>
+          </div>
+          <input id="soundFile" type="file" accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav,.mp3,.ogg,.wav" hidden>
+        </aside>
+
+        <section class="builder-panel sound-assignment-panel" aria-label="Sound assignments">
+          <div class="panel-section">
+            <div class="sound-page-head">
+              <p class="section-title">Assignments</p>
+              <div id="saveStatus" class="muted">Loading assignments</div>
+            </div>
+            <div id="soundEffectsList" class="sound-effects-list global-sound-list"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
