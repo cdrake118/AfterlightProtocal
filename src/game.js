@@ -148,7 +148,6 @@ const audioVolumes = {
 };
 loadGlobalSoundEffects();
 let lastHitSound = 0;
-let lastGhostDamageSound = 0;
 let currentMapName = "Observatory Annex";
 let matchDuration = 300;
 let botPressure = "standard";
@@ -1713,11 +1712,12 @@ function resolveFlashlights(dt) {
         lastHitSound = performance.now();
         playSound("hit");
       }
-      if (performance.now() - lastGhostDamageSound > 145) {
-        lastGhostDamageSound = performance.now();
-        playSound("ghost_damage");
-      }
     }
+  }
+  if (hit) {
+    startLoopingSound("ghost_damage", "ghost_damage");
+  } else {
+    stopLoopingSound("ghost_damage");
   }
   anomaly.revealed = Math.max(0, anomaly.revealed - dt * (hit ? 0.4 : 1.4));
   anomaly.damageFlash = Math.max(0, (anomaly.damageFlash ?? 0) - dt * (hit ? 0.75 : 2.4));
