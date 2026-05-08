@@ -170,7 +170,7 @@ const recentNetworkEvents = [];
 const GameBalance = {
   roundDurationSeconds: 300,
   ghost: {
-    moveSpeed: 117,
+    moveSpeed: 99.45,
     attackBonusRange: 2,
     attackConfirmSeconds: 0.08,
     attackCooldownSeconds: 0.9,
@@ -189,7 +189,7 @@ const GameBalance = {
     memorySecondsForBots: 1.45
   },
   tracker: {
-    moveSpeed: 117,
+    moveSpeed: 99.45,
     flashlightBatteryMax: 144,
     flashlightDrainPerSecond: 19.2,
     aiFlashlightDrainPerSecond: 15.6,
