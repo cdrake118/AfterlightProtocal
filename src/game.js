@@ -3498,6 +3498,11 @@ function drawRelay(relay) {
 }
 
 function drawLighting() {
+  drawLightingWashes();
+  drawAmbientDarkness();
+}
+
+function drawLightingWashes() {
   ctx.save();
   for (const agent of getInvestigators()) {
     if (!agent.lightOn || agent.resolve <= 0) {
@@ -3525,7 +3530,9 @@ function drawLighting() {
     ctx.fillRect(0, 0, world.width, world.height);
   }
   ctx.restore();
+}
 
+function drawAmbientDarkness() {
   ctx.save();
   ctx.globalCompositeOperation = "multiply";
   ctx.fillStyle = state.blackout > 0 && playerRole === "Anomaly" ? "rgba(0, 0, 0, 0.48)" : "rgba(0, 0, 0, 0.34)";
@@ -3814,6 +3821,8 @@ function drawOcclusionOverlays() {
     ctx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
     ctx.clip();
     drawMapImage(source);
+    drawLightingWashes();
+    drawAmbientDarkness();
     ctx.restore();
   }
 }
