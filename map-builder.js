@@ -1346,7 +1346,7 @@ function resolveActorCircleSegment(circle, segment) {
   const dx = circle.x - closest.x;
   const dy = circle.y - closest.y;
   const dist = Math.hypot(dx, dy);
-  const minDist = circle.radius + wallCollisionThicknessAt(segment, circle.x, circle.y) / 2;
+  const minDist = circle.radius + wallThickness(segment) / 2;
   if (dist > 0 && dist < minDist) {
     const push = minDist - dist;
     circle.x += (dx / dist) * push;
@@ -3166,14 +3166,6 @@ function wallThickness(wall) {
   return Number.isFinite(thickness) ? thickness : fallback;
 }
 
-function wallCollisionThicknessAt(wall, x, y) {
-  if (wall?.visible !== false || !isSegmentWall(wall)) {
-    return wallThickness(wall);
-  }
-  const t = segmentProjectionRatio(x, y, wall.x, wall.y, wall.x2, wall.y2);
-  return t > 0 && t < 1 ? wallThickness(wall) + barrierCollisionPadding * 2 : wallThickness(wall);
-}
-
 function occluderThickness(occluder) {
   const thickness = Number(occluder?.thickness ?? defaultOccluderThickness);
   return Number.isFinite(thickness) ? thickness : defaultOccluderThickness;
@@ -3802,7 +3794,7 @@ function pointInOccluder(point, occluder) {
 
 function pointInBlocker(point, blocker) {
   return isSegmentWall(blocker)
-    ? distancePointToSegment(point.x, point.y, blocker.x, blocker.y, blocker.x2, blocker.y2) <= wallCollisionThicknessAt(blocker, point.x, point.y) / 2
+    ? distancePointToSegment(point.x, point.y, blocker.x, blocker.y, blocker.x2, blocker.y2) <= wallThickness(blocker) / 2
     : pointInRect(point, collisionBoundsForObstacle(blocker));
 }
 
@@ -3849,16 +3841,8 @@ function closestPointOnSegment(px, py, x1, y1, x2, y2) {
   const dy = y2 - y1;
   const lengthSq = dx * dx + dy * dy;
   if (!lengthSq) return { x: x1, y: y1 };
-  const t = clamp(segmentProjectionRatio(px, py, x1, y1, x2, y2), 0, 1);
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / lengthSq, 0, 1);
   return { x: x1 + dx * t, y: y1 + dy * t };
-}
-
-function segmentProjectionRatio(px, py, x1, y1, x2, y2) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lengthSq = dx * dx + dy * dy;
-  if (!lengthSq) return 0;
-  return ((px - x1) * dx + (py - y1) * dy) / lengthSq;
 }
 
 function segmentDistance(x1, y1, x2, y2, x3, y3, x4, y4) {

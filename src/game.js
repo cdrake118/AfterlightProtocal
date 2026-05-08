@@ -2686,7 +2686,7 @@ function resolveCircleSegment(circle, segment) {
   const dx = circle.x - closest.x;
   const dy = circle.y - closest.y;
   const dist = Math.hypot(dx, dy);
-  const minDist = circle.radius + wallCollisionThicknessAt(segment, circle.x, circle.y) / 2;
+  const minDist = circle.radius + wallThickness(segment) / 2;
   if (dist > 0 && dist < minDist) {
     const push = minDist - dist;
     circle.x += (dx / dist) * push;
@@ -2788,12 +2788,12 @@ function pointInObstacle(x, y, obstacle) {
   if (!isSegmentWall(obstacle)) {
     return pointInRect(x, y, collisionBoundsForObstacle(obstacle));
   }
-  return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= wallCollisionThicknessAt(obstacle, x, y) / 2;
+  return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= wallThickness(obstacle) / 2;
 }
 
 function pointNearObstacle(x, y, radius, obstacle) {
   if (isSegmentWall(obstacle)) {
-    return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= radius + wallCollisionThicknessAt(obstacle, x, y) / 2;
+    return distancePointToSegment(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2) <= radius + wallThickness(obstacle) / 2;
   }
   const bounds = collisionBoundsForObstacle(obstacle);
   const closestX = clamp(x, bounds.x, bounds.x + bounds.w);
@@ -2812,14 +2812,6 @@ function wallThickness(obstacle) {
   return Number.isFinite(thickness) ? thickness : fallback;
 }
 
-function wallCollisionThicknessAt(obstacle, x, y) {
-  if (obstacle?.visible !== false || !isSegmentWall(obstacle)) {
-    return wallThickness(obstacle);
-  }
-  const t = segmentProjectionRatio(x, y, obstacle.x, obstacle.y, obstacle.x2, obstacle.y2);
-  return t > 0 && t < 1 ? wallThickness(obstacle) + barrierCollisionPadding * 2 : wallThickness(obstacle);
-}
-
 function closestPointOnSegment(px, py, x1, y1, x2, y2) {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -2827,18 +2819,8 @@ function closestPointOnSegment(px, py, x1, y1, x2, y2) {
   if (!lengthSq) {
     return { x: x1, y: y1 };
   }
-  const t = clamp(segmentProjectionRatio(px, py, x1, y1, x2, y2), 0, 1);
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / lengthSq, 0, 1);
   return { x: x1 + dx * t, y: y1 + dy * t };
-}
-
-function segmentProjectionRatio(px, py, x1, y1, x2, y2) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lengthSq = dx * dx + dy * dy;
-  if (!lengthSq) {
-    return 0;
-  }
-  return ((px - x1) * dx + (py - y1) * dy) / lengthSq;
 }
 
 function distancePointToSegment(px, py, x1, y1, x2, y2) {
