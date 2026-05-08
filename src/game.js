@@ -248,7 +248,7 @@ const aiAnomalyMemoryMax = GameBalance.ghost.memorySecondsForBots;
 const aiProbeMinCooldown = GameBalance.ai.probeMinCooldownSeconds;
 const aiProbeMaxCooldown = GameBalance.ai.probeMaxCooldownSeconds;
 const characterSpriteSize = 128;
-const anomalyVisualScale = 0.85;
+const anomalyVisualScale = 0.78;
 const investigatorVisual = {
   width: 48,
   height: 78,

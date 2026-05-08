@@ -23,6 +23,7 @@ const assetTrayKey = "afterlight-map-builder-assets";
 const playtestMapKey = "afterlight-playtest-map";
 const playtestOptionsKey = "afterlight-playtest-options";
 const snapModePreferenceKey = "afterlight-map-builder-snap-mode";
+const actorBarrierPreferenceKey = "afterlight-map-builder-actor-barriers";
 const historyLimit = 50;
 const anomalyAtlasSrc = "assets/characters/anomaly-ghost-atlas.png";
 const anomalyAtlasFrame = 128;
@@ -126,6 +127,7 @@ const validationList = document.querySelector("#validationList");
 const exportOutput = document.querySelector("#exportOutput");
 const importFile = document.querySelector("#importFile");
 const playtestFreezeAnomaly = document.querySelector("#playtestFreezeAnomaly");
+const respectBarriersToggle = document.querySelector("#respectBarriersToggle");
 const backgroundFile = document.querySelector("#backgroundFile");
 const foregroundFile = document.querySelector("#foregroundFile");
 const decorationFile = document.querySelector("#decorationFile");
@@ -172,6 +174,7 @@ const inspector = {
 };
 
 restoreSnapPreference();
+restoreActorBarrierPreference();
 wireControls();
 const restoredLastMap = restoreLastLoadedMap();
 syncPlaytestOptionsForm();
@@ -224,6 +227,10 @@ function wireControls() {
   document.querySelector("#analysisBtn").addEventListener("click", toggleAnalysisOverlay);
   document.querySelector("#playtestBtn").addEventListener("click", playtestMap);
   playtestFreezeAnomaly.addEventListener("change", savePlaytestOptions);
+  respectBarriersToggle.addEventListener("change", () => {
+    persistActorBarrierPreference();
+    markStatus(respectBarriersToggle.checked ? "Actor barrier movement enabled" : "Actor barrier movement disabled");
+  });
   document.querySelector("#fitBtn").addEventListener("click", draw);
   document.querySelector("#exportGameBtn").addEventListener("click", () => setExportMode("game"));
   document.querySelector("#exportTiledBtn").addEventListener("click", () => setExportMode("tiled"));
@@ -767,6 +774,14 @@ function persistSnapPreference() {
   localStorage.setItem(snapModePreferenceKey, snapMode.value);
 }
 
+function restoreActorBarrierPreference() {
+  respectBarriersToggle.checked = localStorage.getItem(actorBarrierPreferenceKey) === "true";
+}
+
+function persistActorBarrierPreference() {
+  localStorage.setItem(actorBarrierPreferenceKey, respectBarriersToggle.checked ? "true" : "false");
+}
+
 function preloadImage(src) {
   if (!src || imageCache.has(src)) return imageCache.get(src) ?? null;
   const image = new Image();
@@ -1232,13 +1247,113 @@ function moveSelection(dx, dy) {
   if (!originals.length) return;
   for (const item of originals) {
     if (!item.original) continue;
-    writeSelection(item.ref, {
-      ...item.original,
-      x: item.original.x + dx,
-      y: item.original.y + dy
-    });
+    writeSelection(item.ref, movedSelectionObject(item.ref, item.original, dx, dy));
   }
   updateExport();
+}
+
+function movedSelectionObject(ref, original, dx, dy) {
+  if (!actorMovementRespectsBarriers(ref)) {
+    return {
+      ...original,
+      x: original.x + dx,
+      y: original.y + dy
+    };
+  }
+  const point = moveActorPointWithBarriers(original, dx, dy, getActorCollisionRadius(ref.kind));
+  return {
+    ...original,
+    x: point.x,
+    y: point.y
+  };
+}
+
+function actorMovementRespectsBarriers(ref) {
+  return respectBarriersToggle.checked && (ref?.kind === "player" || ref?.kind === "investigator" || ref?.kind === "anomaly");
+}
+
+function getActorCollisionRadius(kind) {
+  return kind === "anomaly" ? runtimeFootprints.anomaly.radius : runtimeFootprints.investigator.radius;
+}
+
+function moveActorPointWithBarriers(original, dx, dy, radius) {
+  const circle = {
+    x: original.x,
+    y: original.y,
+    radius
+  };
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 4));
+  const stepX = dx / steps;
+  const stepY = dy / steps;
+  for (let index = 0; index < steps; index += 1) {
+    moveActorCircleWithBarriers(circle, stepX, stepY);
+  }
+  return {
+    x: clamp(Math.round(circle.x), radius, world.width - radius),
+    y: clamp(Math.round(circle.y), radius, world.height - radius)
+  };
+}
+
+function moveActorCircleWithBarriers(circle, dx, dy) {
+  circle.x += dx;
+  for (const wall of map.walls) {
+    resolveActorCircleObstacle(circle, wall);
+  }
+  circle.y += dy;
+  for (const wall of map.walls) {
+    resolveActorCircleObstacle(circle, wall);
+  }
+  circle.x = clamp(circle.x, circle.radius, world.width - circle.radius);
+  circle.y = clamp(circle.y, circle.radius, world.height - circle.radius);
+}
+
+function resolveActorCircleObstacle(circle, obstacle) {
+  if (isSegmentWall(obstacle)) {
+    resolveActorCircleSegment(circle, obstacle);
+    return;
+  }
+  resolveActorCircleRect(circle, obstacle);
+}
+
+function resolveActorCircleRect(circle, rect) {
+  const cx = clamp(circle.x, rect.x, rect.x + rect.w);
+  const cy = clamp(circle.y, rect.y, rect.y + rect.h);
+  const dx = circle.x - cx;
+  const dy = circle.y - cy;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 0 && dist < circle.radius) {
+    const push = circle.radius - dist;
+    circle.x += (dx / dist) * push;
+    circle.y += (dy / dist) * push;
+    return;
+  }
+  if (dist === 0 && pointInRect(circle, rect)) {
+    const pushes = [
+      { dx: rect.x - circle.x - circle.radius, dy: 0, distance: Math.abs(circle.x - rect.x) },
+      { dx: rect.x + rect.w - circle.x + circle.radius, dy: 0, distance: Math.abs(rect.x + rect.w - circle.x) },
+      { dx: 0, dy: rect.y - circle.y - circle.radius, distance: Math.abs(circle.y - rect.y) },
+      { dx: 0, dy: rect.y + rect.h - circle.y + circle.radius, distance: Math.abs(rect.y + rect.h - circle.y) }
+    ].sort((a, b) => a.distance - b.distance);
+    circle.x += pushes[0].dx;
+    circle.y += pushes[0].dy;
+  }
+}
+
+function resolveActorCircleSegment(circle, segment) {
+  const closest = closestPointOnSegment(circle.x, circle.y, segment.x, segment.y, segment.x2, segment.y2);
+  const dx = circle.x - closest.x;
+  const dy = circle.y - closest.y;
+  const dist = Math.hypot(dx, dy);
+  const minDist = circle.radius + wallThickness(segment) / 2;
+  if (dist > 0 && dist < minDist) {
+    const push = minDist - dist;
+    circle.x += (dx / dist) * push;
+    circle.y += (dy / dist) * push;
+  } else if (dist === 0) {
+    const angle = Math.atan2(segment.y2 - segment.y, segment.x2 - segment.x) + Math.PI / 2;
+    circle.x += Math.cos(angle) * minDist;
+    circle.y += Math.sin(angle) * minDist;
+  }
 }
 
 function nudgeSelection(event) {
@@ -1257,11 +1372,7 @@ function nudgeSelection(event) {
   for (const ref of refs) {
     const current = readSelection(ref);
     if (!current) continue;
-    writeSelection(ref, {
-      ...current,
-      x: current.x + dx,
-      y: current.y + dy
-    });
+    writeSelection(ref, movedSelectionObject(ref, current, dx, dy));
   }
   syncInspector();
   changed(true, false);
