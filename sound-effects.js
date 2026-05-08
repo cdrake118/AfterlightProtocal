@@ -16,7 +16,6 @@ const soundEffectDefinitions = [
   { id: "downed", label: "Investigator downed", bus: "sfx" },
   { id: "blackout", label: "Anomaly blackout", bus: "sfx" },
   { id: "dash", label: "Dash / speed burst", bus: "sfx" },
-  { id: "ability", label: "Pulse scan ability", bus: "sfx" },
   { id: "relay", label: "Relay charged", bus: "sfx" },
   { id: "lightning", label: "Arena event / lightning", bus: "sfx" },
   { id: "win", label: "Team wins", bus: "sfx" },

@@ -14,7 +14,7 @@ This writes a generated action map to `dist/input`. The map is shaped for future
 ## Action Sets
 
 - Menu: UI select/back affordances for future menu navigation.
-- Investigator: movement, aim, light, pulse scan, and proximity revive.
+- Investigator: movement, aim, light, and proximity revive.
 - Anomaly: movement, dash, and blackout wave.
 
 ## Steam Input Path

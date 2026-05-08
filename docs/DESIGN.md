@@ -22,7 +22,6 @@
 - Battery cell: drains while active, does not auto-recharge, and refills from field pickups; one pickup starts on the map, then another appears every 20 seconds up to three active pickups.
 - Revive tether: restores collapsed allies after a short channel.
 - Signal meter: proximity readout that grows with anomaly danger without granting exact position.
-- Pulse scan: short-range room check that can reveal and damage the anomaly through a successful tag.
 - Field AI: bot investigators prioritize revives, batteries, searching, and coordinated hunting for solo playtesting.
 - Readability layer: teammate nameplates, bot intent tags, world prompts, and signal feedback keep objectives scannable.
 
@@ -41,9 +40,8 @@ Investigator mode:
 - Move: WASD or arrow keys.
 - Aim: mouse.
 - Light: hold left mouse button.
-- Pulse scan: E.
 - Revive tether: stand near a collapsed teammate to revive them over time.
-- Controller: left stick move, right stick aim, right trigger light, Y or left bumper pulse scan.
+- Controller: left stick move, right stick aim, right trigger light.
 
 Anomaly mode:
 

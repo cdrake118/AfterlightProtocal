@@ -38,6 +38,7 @@ let dashPulse = false;
 let abilityPulse = false;
 let activePointerId = null;
 let activeAimPointerId = null;
+const miniMapImages = new Map();
 
 roomCodeInput.value = (params.get("code") ?? "").toUpperCase();
 nameInput.value = storedName;
@@ -95,6 +96,9 @@ dashBtn.addEventListener("click", () => {
 });
 
 abilityBtn.addEventListener("click", () => {
+  if (member?.role !== "Anomaly") {
+    return;
+  }
   abilityPulse = true;
   abilityBtn.classList.add("active");
   setTimeout(() => abilityBtn.classList.remove("active"), 140);
@@ -177,7 +181,7 @@ setInterval(() => {
     aim: member?.role === "Investigator" ? aimVector : move,
     light: member?.role === "Investigator" ? light : false,
     dash: member?.role === "Anomaly" ? dashPulse : false,
-    ability: abilityPulse,
+    ability: member?.role === "Anomaly" ? abilityPulse : false,
     sequence
   });
   dashPulse = false;
@@ -204,7 +208,8 @@ function renderLobby() {
   padScreen.dataset.role = member.role.toLowerCase();
   lightBtn.hidden = true;
   aimJoystick.hidden = member.role !== "Investigator";
-  abilityBtn.textContent = member.role === "Anomaly" ? "Blackout" : "Ping";
+  abilityBtn.hidden = member.role !== "Anomaly";
+  abilityBtn.textContent = "Blackout";
   dashBtn.hidden = member.role !== "Anomaly";
   if (member.role !== "Investigator") releaseAimJoystick();
   padStatus.textContent = `${member.role} assigned. ${lobby.members.filter((item) => item.connected).length} joined.`;
@@ -245,29 +250,70 @@ function releaseAimJoystick(event = null) {
 }
 
 function drawMiniMap(state, role) {
+  resizeMiniMap();
   const w = miniMap.width;
   const h = miniMap.height;
   miniMapCtx.clearRect(0, 0, w, h);
   miniMapCtx.fillStyle = "#071014";
   miniMapCtx.fillRect(0, 0, w, h);
+  const viewport = getMiniMapViewport(w, h);
+  const sx = (x) => viewport.x + (x / 1280) * viewport.w;
+  const sy = (y) => viewport.y + (y / 720) * viewport.h;
+  const sw = (width) => (width / 1280) * viewport.w;
+  const sh = (height) => (height / 720) * viewport.h;
+
+  drawMiniMapImage(state?.backgroundImage, viewport);
+  if (!state?.backgroundImage?.src) {
+    miniMapCtx.save();
+    miniMapCtx.strokeStyle = "rgba(122, 228, 214, 0.08)";
+    miniMapCtx.lineWidth = 1;
+    for (let x = 0; x <= 1280; x += 160) {
+      miniMapCtx.beginPath();
+      miniMapCtx.moveTo(sx(x), viewport.y);
+      miniMapCtx.lineTo(sx(x), viewport.y + viewport.h);
+      miniMapCtx.stroke();
+    }
+    for (let y = 0; y <= 720; y += 120) {
+      miniMapCtx.beginPath();
+      miniMapCtx.moveTo(viewport.x, sy(y));
+      miniMapCtx.lineTo(viewport.x + viewport.w, sy(y));
+      miniMapCtx.stroke();
+    }
+    miniMapCtx.restore();
+  }
+  for (const decoration of state?.decorations ?? []) {
+    drawMiniMapImage(decoration, viewport);
+  }
   miniMapCtx.strokeStyle = "rgba(122, 228, 214, 0.28)";
   miniMapCtx.lineWidth = 2;
-  miniMapCtx.strokeRect(8, 8, w - 16, h - 16);
-  const sx = (x) => 8 + (x / 1280) * (w - 16);
-  const sy = (y) => 8 + (y / 720) * (h - 16);
+  miniMapCtx.strokeRect(viewport.x, viewport.y, viewport.w, viewport.h);
   for (const wall of state?.walls ?? []) {
     miniMapCtx.strokeStyle = wall.visible === false ? "rgba(244, 179, 93, 0.72)" : "rgba(174, 191, 199, 0.44)";
     miniMapCtx.fillStyle = "rgba(174, 191, 199, 0.22)";
     if (wall.shape === "segment") {
-      miniMapCtx.lineWidth = Math.max(1.5, ((wall.thickness ?? 1) / 1280) * (w - 16));
+      miniMapCtx.lineWidth = Math.max(1.5, ((wall.thickness ?? 1) / 1280) * viewport.w);
       miniMapCtx.beginPath();
       miniMapCtx.moveTo(sx(wall.x), sy(wall.y));
       miniMapCtx.lineTo(sx(wall.x2), sy(wall.y2));
       miniMapCtx.stroke();
       continue;
     }
-    miniMapCtx.fillRect(sx(wall.x), sy(wall.y), (wall.w / 1280) * (w - 16), (wall.h / 720) * (h - 16));
+    miniMapCtx.fillRect(sx(wall.x), sy(wall.y), sw(wall.w), sh(wall.h));
   }
+  for (const prop of state?.props ?? []) {
+    miniMapCtx.fillStyle = prop.color ?? "rgba(83, 96, 106, 0.76)";
+    miniMapCtx.globalAlpha = 0.7;
+    miniMapCtx.fillRect(sx(prop.x), sy(prop.y), sw(prop.w), sh(prop.h));
+    miniMapCtx.globalAlpha = 1;
+  }
+  for (const battery of state?.batteries ?? []) {
+    if (!battery.active) continue;
+    miniMapCtx.fillStyle = battery.kind === "overcharge" ? "#dff7ff" : "#f4b35d";
+    miniMapCtx.beginPath();
+    miniMapCtx.arc(sx(battery.x), sy(battery.y), 3.5, 0, Math.PI * 2);
+    miniMapCtx.fill();
+  }
+  drawMiniMapImage(state?.foregroundImage, viewport, 0.4);
   for (const agent of state?.investigators ?? []) {
     const x = sx(agent.x);
     const y = sy(agent.y);
@@ -311,6 +357,55 @@ function drawMiniMap(state, role) {
     miniMapCtx.arc(sx(state.anomaly.x), sy(state.anomaly.y), 6, 0, Math.PI * 2);
     miniMapCtx.fill();
   }
+}
+
+function resizeMiniMap() {
+  const rect = miniMap.getBoundingClientRect();
+  const width = Math.max(320, Math.round(rect.width || miniMap.width));
+  const height = Math.max(180, Math.round(rect.height || miniMap.height));
+  if (miniMap.width !== width || miniMap.height !== height) {
+    miniMap.width = width;
+    miniMap.height = height;
+  }
+}
+
+function getMiniMapViewport(width, height) {
+  const scale = Math.min(width / 1280, height / 720);
+  const w = 1280 * scale;
+  const h = 720 * scale;
+  return {
+    x: (width - w) / 2,
+    y: (height - h) / 2,
+    w,
+    h
+  };
+}
+
+function drawMiniMapImage(imageRect, viewport, alphaOverride = null) {
+  if (!imageRect?.src) return;
+  const image = getMiniMapImage(imageRect.src);
+  if (!image.complete || !image.naturalWidth) return;
+  const x = viewport.x + ((imageRect.x ?? 0) / 1280) * viewport.w;
+  const y = viewport.y + ((imageRect.y ?? 0) / 720) * viewport.h;
+  const width = ((imageRect.w ?? 1280) / 1280) * viewport.w;
+  const height = ((imageRect.h ?? 720) / 720) * viewport.h;
+  const rotation = ((imageRect.rotation ?? 0) * Math.PI) / 180;
+  miniMapCtx.save();
+  miniMapCtx.translate(x + width / 2, y + height / 2);
+  miniMapCtx.rotate(rotation);
+  miniMapCtx.globalAlpha = alphaOverride ?? (Number.isFinite(imageRect.opacity) ? imageRect.opacity : 1);
+  miniMapCtx.drawImage(image, -width / 2, -height / 2, width, height);
+  miniMapCtx.restore();
+}
+
+function getMiniMapImage(src) {
+  if (miniMapImages.has(src)) {
+    return miniMapImages.get(src);
+  }
+  const image = new Image();
+  image.src = src;
+  miniMapImages.set(src, image);
+  return image;
 }
 
 function setJoinStatus(text) {

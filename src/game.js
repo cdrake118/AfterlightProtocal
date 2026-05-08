@@ -280,7 +280,6 @@ const anomalyAtlas = {
 };
 
 const abilityMax = {
-  Investigator: 8,
   Anomaly: GameBalance.ghost.magicCooldownSeconds
 };
 const initialAnomalyBlackoutDelay = GameBalance.ghost.initialMagicDelaySeconds;
@@ -745,6 +744,8 @@ function makeAnomaly() {
     radius: 10,
     speed: anomalyMoveSpeed,
     dash: 0,
+    dashDirX: 1,
+    dashDirY: 0,
     dashCooldown: 0,
     abilityCooldown: 0,
     stability: 100,
@@ -1109,7 +1110,8 @@ function controlAnomaly(anomaly, dt) {
     holdAnomalyStill(anomaly, dt);
     return;
   }
-  const movement = getAnomalyMovementVector(anomaly, readMovement());
+  const movementInput = readMovement();
+  const movement = getAnomalyMovementVector(anomaly, movementInput);
   const speed = anomaly.speed * getAnomalySpeedMultiplier(anomaly) * (anomaly.dash > 0 ? 2.15 : 1);
   if (Math.hypot(movement.x, movement.y) > 0.08) {
     anomaly.aim = Math.atan2(movement.y, movement.x);
@@ -1188,14 +1190,15 @@ function controlAnomalyFromInput(anomaly, input, dt) {
     holdAnomalyStill(anomaly, dt);
     return;
   }
+  const movementInput = normalizeInputVector(input.move);
   if (input.dash) {
-    triggerDashForActor(anomaly, "Anomaly");
+    triggerDashForActor(anomaly, "Anomaly", movementInput);
   }
   if (input.ability && anomaly.abilityCooldown <= 0) {
     anomaly.abilityCooldown = abilityMax.Anomaly;
     triggerBlackout({ trackStats: true, announce: true });
   }
-  const movement = getAnomalyMovementVector(anomaly, normalizeInputVector(input.move));
+  const movement = getAnomalyMovementVector(anomaly, movementInput);
   const speed = anomaly.speed * getAnomalySpeedMultiplier(anomaly) * (anomaly.dash > 0 ? 2.15 : 1);
   if (Math.hypot(movement.x, movement.y) > 0.08) {
     anomaly.aim = Math.atan2(movement.y, movement.x);
@@ -1218,6 +1221,9 @@ function normalizeInputVector(value) {
 
 function getAnomalyMovementVector(anomaly, movement) {
   const len = Math.hypot(movement.x, movement.y);
+  if (anomaly.dash > 0) {
+    return getAnomalyDashDirection(anomaly, movement);
+  }
   if (anomaly.escapeTimer > 0) {
     if (len > 0.08) {
       setAnomalyRunDirection(anomaly, movement.x / len, movement.y / len);
@@ -1229,6 +1235,26 @@ function getAnomalyMovementVector(anomaly, movement) {
     setAnomalyRunDirection(anomaly, movement.x / len, movement.y / len);
   }
   return movement;
+}
+
+function getAnomalyDashDirection(anomaly, movement = { x: 0, y: 0 }) {
+  const movementLen = Math.hypot(movement.x, movement.y);
+  if (movementLen > 0.08 && anomaly.dash <= 0) {
+    return { x: movement.x / movementLen, y: movement.y / movementLen };
+  }
+  const dashX = Number.isFinite(anomaly.dashDirX) ? anomaly.dashDirX : 0;
+  const dashY = Number.isFinite(anomaly.dashDirY) ? anomaly.dashDirY : 0;
+  const dashLen = Math.hypot(dashX, dashY);
+  if (dashLen > 0.08) {
+    return { x: dashX / dashLen, y: dashY / dashLen };
+  }
+  const lastX = Number.isFinite(anomaly.lastMoveX) ? anomaly.lastMoveX : 0;
+  const lastY = Number.isFinite(anomaly.lastMoveY) ? anomaly.lastMoveY : 0;
+  const lastLen = Math.hypot(lastX, lastY);
+  if (lastLen > 0.08) {
+    return { x: lastX / lastLen, y: lastY / lastLen };
+  }
+  return { x: Math.cos(anomaly.aim ?? 0), y: Math.sin(anomaly.aim ?? 0) };
 }
 
 function setAnomalyRunDirection(anomaly, x, y) {
@@ -2412,34 +2438,7 @@ function useRoleAbility() {
   }
 
   if (playerRole === "Investigator") {
-    if (state.player.resolve <= 0) {
-      setStatus("Waiting for revive");
-      return;
-    }
-    if (state.player.abilityCooldown > 0) {
-      setStatus(`Pulse charging: ${Math.ceil(state.player.abilityCooldown)}s`);
-      return;
-    }
-    state.player.abilityCooldown = abilityMax.Investigator;
-    state.stats.abilityUses += 1;
-    playSound("ability");
-    abilityFlash = 0.28;
-    createRing(state.player.x, state.player.y, "#dff7ff", 390, 1.05);
-    burst(state.player.x, state.player.y, "#dff7ff", 24);
-    const tagged = distance(state.player, state.anomaly) < 360 && !segmentBlocked(state.player.x, state.player.y, state.anomaly.x, state.anomaly.y);
-    if (tagged) {
-      state.anomaly.revealed = Math.max(state.anomaly.revealed, 2.3);
-      applyAnomalyDamage(10);
-      addCameraShake(0.14);
-      createRing(state.anomaly.x, state.anomaly.y, "#7ae4d6", 130, 0.9);
-      burst(state.anomaly.x, state.anomaly.y, "#dff7ff", 30);
-      publishMatchEvent("ability_used", { role: playerRole, ability: "Pulse Scan", tagged: true }, true);
-      setStatus("Pulse tagged the anomaly");
-    } else {
-      addCameraShake(0.05);
-      publishMatchEvent("ability_used", { role: playerRole, ability: "Pulse Scan", tagged: false }, true);
-      setStatus("Pulse wave expanded, no anomaly lock");
-    }
+    setStatus("Investigators have no role ability");
     return;
   }
 
@@ -2601,7 +2600,7 @@ function updateControllerInput() {
   if (controller.justDash) {
     tryDash();
   }
-  if (controller.justAbility) {
+  if (controller.justAbility && playerRole === "Anomaly") {
     useRoleAbility();
   }
 }
@@ -2634,11 +2633,17 @@ function tryDash() {
     setStatus("Investigators do not dash");
     return;
   }
-  triggerDashForActor(actor, playerRole);
+  triggerDashForActor(actor, playerRole, playerRole === "Anomaly" ? readMovement() : null);
 }
 
-function triggerDashForActor(actor, role) {
+function triggerDashForActor(actor, role, direction = null) {
   if (actor.dash <= 0 && actor.dashCooldown <= 0 && state.phase === "playing") {
+    if (role === "Anomaly") {
+      const dashDirection = getAnomalyDashDirection(actor, normalizeInputVector(direction));
+      actor.dashDirX = dashDirection.x;
+      actor.dashDirY = dashDirection.y;
+      setAnomalyRunDirection(actor, dashDirection.x, dashDirection.y);
+    }
     actor.dash = role === "Anomaly" ? GameBalance.ghost.dashDurationSeconds : 0.16;
     actor.dashCooldown = role === "Anomaly" ? GameBalance.ghost.dashCooldownSeconds : 1.6;
     if (role === "Anomaly") {
@@ -5453,15 +5458,18 @@ function updateHud() {
   batteryMeter.value = playerRole === "Investigator" ? state.player.battery : maxBatteryCapacity;
   signalMeter.value = getSignalStrength() * 100;
   const actor = playerRole === "Investigator" ? state.player : state.anomaly;
-  const maxCooldown = abilityMax[playerRole];
-  abilityMeter.value = 100 - (actor.abilityCooldown / maxCooldown) * 100;
-  const abilityName = playerRole === "Investigator" ? "Pulse Scan" : "Blackout Wave";
-  abilityBtn.textContent = actor.abilityCooldown > 0
-    ? `${abilityName} ${Math.ceil(actor.abilityCooldown)}s`
-    : abilityName;
-  abilityRef.textContent = actor.abilityCooldown > 0
-    ? `E ${Math.ceil(actor.abilityCooldown)}s`
-    : playerRole === "Investigator" ? "E Pulse Scan" : "E Blackout";
+  if (playerRole === "Anomaly") {
+    abilityMeter.value = 100 - (actor.abilityCooldown / abilityMax.Anomaly) * 100;
+    abilityBtn.textContent = actor.abilityCooldown > 0
+      ? `Blackout Wave ${Math.ceil(actor.abilityCooldown)}s`
+      : "Blackout Wave";
+    abilityRef.textContent = actor.abilityCooldown > 0
+      ? `E ${Math.ceil(actor.abilityCooldown)}s`
+      : "E Blackout";
+  } else {
+    abilityMeter.value = 0;
+    abilityRef.textContent = "";
+  }
   interactRef.hidden = !relaysEnabled;
   interactRef.textContent = relaysEnabled ? "Near Relay" : "";
   const event = maps[currentMapName]?.event ?? maps["Observatory Annex"].event;
@@ -5975,7 +5983,17 @@ function publishPartySnapshot() {
       resolve: Math.round(agent.resolve),
       battery: Math.round(agent.battery)
     })),
-    walls: walls.map(snapshotWall)
+    walls: walls.map(snapshotWall),
+    props: props.map(snapshotMapRect),
+    decorations: mapDecorations.map(snapshotMapImage),
+    backgroundImage: snapshotMapImage(mapBackgroundImage),
+    foregroundImage: snapshotMapImage(mapForegroundImage),
+    batteries: state.batteries.map((battery) => ({
+      x: Math.round(battery.x),
+      y: Math.round(battery.y),
+      active: Boolean(battery.active),
+      kind: battery.kind
+    }))
   });
 }
 
@@ -5997,6 +6015,31 @@ function snapshotWall(wall) {
     w: Math.round(wall.w),
     h: Math.round(wall.h),
     ...(wall.visible === false ? { visible: false } : {})
+  };
+}
+
+function snapshotMapRect(rect) {
+  return {
+    x: Math.round(rect.x),
+    y: Math.round(rect.y),
+    w: Math.round(rect.w),
+    h: Math.round(rect.h),
+    color: rect.color
+  };
+}
+
+function snapshotMapImage(image) {
+  if (!image?.src) {
+    return null;
+  }
+  return {
+    src: image.src,
+    x: Math.round(image.x ?? 0),
+    y: Math.round(image.y ?? 0),
+    w: Math.round(image.w ?? world.width),
+    h: Math.round(image.h ?? world.height),
+    opacity: Number.isFinite(image.opacity) ? image.opacity : 1,
+    rotation: Number(image.rotation ?? 0)
   };
 }
 
@@ -6591,10 +6634,10 @@ function syncAccessibilityButtons() {
 }
 
 function syncRoleUi() {
-  const abilityName = playerRole === "Investigator" ? "Pulse Scan" : "Blackout Wave";
   roleBtn.textContent = `Role: ${playerRole}`;
-  abilityBtn.textContent = abilityName;
-  abilityRef.textContent = playerRole === "Investigator" ? "E Pulse Scan" : "E Blackout";
+  abilityBtn.hidden = playerRole !== "Anomaly";
+  abilityBtn.textContent = "Blackout Wave";
+  abilityRef.textContent = playerRole === "Anomaly" ? "E Blackout" : "";
   interactRef.hidden = !relaysEnabled;
   interactRef.textContent = relaysEnabled ? "Near Relay" : "";
 }
@@ -6845,7 +6888,6 @@ function playGeneratedSound(type) {
 function getGeneratedSoundSettings(type) {
   return {
     start: [220, 0.13, "sine", 0.08],
-    ability: [620, 0.18, "triangle", 0.08],
     blackout: [96, 0.28, "sawtooth", 0.08],
     dash: [330, 0.06, "triangle", 0.045],
     relay: [520, 0.32, "sine", 0.08],
@@ -7580,7 +7622,7 @@ window.addEventListener("keydown", (event) => {
   if (event.code === "Space") {
     tryDash();
   }
-  if (event.code === "KeyE") {
+  if (event.code === "KeyE" && playerRole === "Anomaly") {
     useRoleAbility();
   }
 });

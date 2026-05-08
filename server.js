@@ -57,7 +57,6 @@ const soundEffectEventIds = new Set([
   "downed",
   "blackout",
   "dash",
-  "ability",
   "relay",
   "lightning",
   "win",
@@ -1083,7 +1082,7 @@ function sanitizeInput(payload, role = "Investigator") {
     aim: sanitizeVector(payload.aim),
     light: Boolean(payload.light),
     dash: role === "Anomaly" && Boolean(payload.dash),
-    ability: Boolean(payload.ability),
+    ability: role === "Anomaly" && Boolean(payload.ability),
     sequence: Number.isFinite(payload.sequence) ? payload.sequence : 0
   };
 }

@@ -43,7 +43,13 @@
 }
 
 .pad-screen[data-role="anomaly"] {
-  width: min(100%, 760px);
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  overflow: hidden;
+  display: block;
 }
 
 .join-card {
@@ -132,6 +138,15 @@
   background: #071014;
 }
 
+.pad-screen[data-role="anomaly"] #miniMap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
 .touch-zone {
   min-height: 52svh;
   display: grid;
@@ -213,6 +228,72 @@
 .action-button.active {
   background: #f4b35d;
   color: #071014;
+}
+
+.pad-screen[data-role="anomaly"] .controller-top {
+  position: absolute;
+  z-index: 3;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  padding: 8px 10px;
+  border: 1px solid rgba(226, 238, 246, 0.14);
+  border-radius: 8px;
+  background: rgba(5, 8, 12, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.pad-screen[data-role="anomaly"] .controller-top h1 {
+  font-size: clamp(1.25rem, 4vw, 2rem);
+}
+
+.pad-screen[data-role="anomaly"] .touch-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  min-height: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.pad-screen[data-role="anomaly"] .joystick,
+.pad-screen[data-role="anomaly"] .action-pad {
+  position: absolute;
+  pointer-events: auto;
+  opacity: 0.68;
+}
+
+.pad-screen[data-role="anomaly"] .joystick {
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(28vw, 190px);
+}
+
+.pad-screen[data-role="anomaly"] .action-pad {
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(31vw, 230px);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.pad-screen[data-role="anomaly"] .action-button {
+  min-height: 58px;
+  background: rgba(9, 20, 26, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.pad-screen[data-role="anomaly"] .controller-status {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(5, 8, 12, 0.48);
+  color: rgba(237, 247, 247, 0.78);
 }
 
 @media (orientation: landscape) {

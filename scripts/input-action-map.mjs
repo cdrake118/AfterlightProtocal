@@ -60,15 +60,6 @@ const actionSets = [
         gamepad: ["Right Trigger"],
         localizationId: "input.light",
         note: "Held action; drains battery while active."
-      },
-      {
-        id: "ability",
-        name: "Pulse Scan",
-        type: "button",
-        keyboard: ["E"],
-        gamepad: ["Y", "Left Bumper"],
-        localizationId: "input.pulse_scan",
-        note: "Investigator role ability."
       }
     ]
   },
