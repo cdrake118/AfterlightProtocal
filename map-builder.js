@@ -12,6 +12,7 @@ const resizeIntentThreshold = 6;
 const resizeIntentRatio = 1.35;
 const defaultWallThickness = 24;
 const defaultBarrierThickness = 1;
+const defaultOccluderThickness = 96;
 const wallAnchorHitRadius = 18;
 const storageFloorImageMax = { width: 1280, height: 720, quality: 0.86 };
 const storageDecorationImageMax = { width: 640, height: 640, quality: 0.86 };
@@ -729,23 +730,28 @@ function preloadImage(src) {
 function handlePointerDown(event) {
   lastPointerEvent = event;
   canvas.setPointerCapture(event.pointerId);
+  const segmentTool = activeTool === "wall" || activeTool === "barrier" || activeTool === "occluder";
   const wallTool = activeTool === "wall" || activeTool === "barrier";
-  const wallPoint = wallTool ? wallDrawPoint(event) : null;
+  const wallPoint = segmentTool ? wallDrawPoint(event) : null;
   const point = wallPoint?.point ?? canvasPoint(event);
   const hit = hitTest(point);
-  if (wallTool) {
+  if (segmentTool) {
     if (pointer?.mode === "drawSegment") {
-      finishSegmentWall(point);
+      finishSegmentObject(point);
     } else if (wallPoint.anchor) {
       pointer = { mode: "drawSegment", kind: activeTool, start: point, current: point };
       markStatus("Endpoint linked");
-    } else if (hit?.kind === "wall") {
+    } else if (wallTool && hit?.kind === "wall") {
       setSelection(hit);
       syncInspector();
       markStatus("Wall selected");
+    } else if (activeTool === "occluder" && hit?.kind === "occluder") {
+      setSelection(hit);
+      syncInspector();
+      markStatus("Occluder selected");
     } else {
       pointer = { mode: "drawSegment", kind: activeTool, start: point, current: point };
-      markStatus("Click wall endpoint");
+      markStatus(activeTool === "occluder" ? "Click occluder endpoint" : "Click wall endpoint");
     }
     draw();
     return;
@@ -753,7 +759,7 @@ function handlePointerDown(event) {
   if (activeTool === "select") {
     const handle = hitResizeHandle(point);
     if (handle && selectedGroup.length <= 1) {
-      selectedEndpoint = selected?.kind === "wall" && (handle === "start" || handle === "end")
+      selectedEndpoint = (selected?.kind === "wall" || selected?.kind === "occluder") && (handle === "start" || handle === "end")
         ? { ref: { ...selected }, endpoint: handle }
         : null;
       pointer = { mode: "resize", handle, start: point, original: cloneObject(readSelection(selected)) };
@@ -789,7 +795,7 @@ function handlePointerDown(event) {
     }
     return;
   }
-  if (activeTool === "prop" || activeTool === "occluder") {
+  if (activeTool === "prop") {
     pointer = { mode: "drawRect", kind: activeTool, start: point, current: point };
     return;
   }
@@ -800,7 +806,7 @@ function handlePointerMove(event) {
   lastPointerEvent = event;
   const point = pointer?.mode === "drawSegment"
     ? wallDrawPoint(event).point
-    : pointer?.mode === "resize" && selected?.kind === "wall" && isSegmentWall(pointer.original)
+    : pointer?.mode === "resize" && (selected?.kind === "wall" || selected?.kind === "occluder") && isSegmentWall(pointer.original)
       ? wallDrawPoint(event, selected).point
       : canvasPoint(event);
   cursorPosition.textContent = `x ${Math.round(point.x)}, y ${Math.round(point.y)}`;
@@ -881,12 +887,28 @@ function handlePointerUp() {
   draw();
 }
 
-function finishSegmentWall(point) {
+function finishSegmentObject(point) {
   const start = pointer.start;
   const length = distance(start, point);
   if (length < 8) {
     pointer = { mode: "drawSegment", kind: pointer.kind, start: point, current: point };
-    markStatus("Wall start reset");
+    markStatus(pointer.kind === "occluder" ? "Occluder start reset" : "Wall start reset");
+    return;
+  }
+  if (pointer.kind === "occluder") {
+    map.occluders.push(normalizeOccluder({
+      shape: "segment",
+      x: start.x,
+      y: start.y,
+      x2: point.x,
+      y2: point.y,
+      thickness: defaultOccluderThickness,
+      name: `Occluder ${map.occluders.length + 1}`
+    }));
+    setSelection({ kind: "occluder", index: map.occluders.length - 1 });
+    pointer = null;
+    changed(true, true);
+    markStatus("Segment occluder added");
     return;
   }
   map.walls.push(normalizeWall({
@@ -1041,7 +1063,7 @@ function hitTest(point) {
     if (pointInRect(point, map.decorations[index])) return { kind: "decoration", index };
   }
   for (let index = map.occluders.length - 1; index >= 0; index -= 1) {
-    if (pointInRect(point, map.occluders[index])) return { kind: "occluder", index };
+    if (pointInOccluder(point, map.occluders[index])) return { kind: "occluder", index };
   }
   return null;
 }
@@ -1105,6 +1127,19 @@ function writeSelection(ref, next) {
   if (ref.kind === "foreground") map.foregroundImage = normalizeImageRect({ ...map.foregroundImage, ...next, x, y });
   if (ref.kind === "occluder") {
     const existing = map.occluders[ref.index];
+    if (isSegmentWall(existing)) {
+      const dx = x - Math.round(existing.x ?? 0);
+      const dy = y - Math.round(existing.y ?? 0);
+      map.occluders[ref.index] = normalizeOccluder({
+        ...existing,
+        ...next,
+        x,
+        y,
+        ...(next.x2 === undefined ? { x2: existing.x2 + dx } : {}),
+        ...(next.y2 === undefined ? { y2: existing.y2 + dy } : {})
+      });
+      return;
+    }
     const existingDepthY = existing.depthY ?? existing.y + existing.h;
     const incomingDepthY = Number(next.depthY);
     const depthMoved = Number.isFinite(incomingDepthY) && Math.round(incomingDepthY) !== Math.round(existingDepthY);
@@ -1244,7 +1279,12 @@ function pasteComponentItem(kind, data, offset) {
     map.decorations.push(normalizeImageRect({ ...data, x: data.x + offset, y: data.y + offset }));
     return { kind: "decoration", index: map.decorations.length - 1 };
   } else if (kind === "occluder") {
-    map.occluders.push(normalizeOccluder({ ...data, x: data.x + offset, y: data.y + offset }));
+    map.occluders.push(normalizeOccluder({
+      ...data,
+      x: data.x + offset,
+      y: data.y + offset,
+      ...(isSegmentWall(data) ? { x2: data.x2 + offset, y2: data.y2 + offset } : {})
+    }));
     return { kind: "occluder", index: map.occluders.length - 1 };
   } else if (kind === "label") {
     map.labels.push([clamp(data.x + offset, 0, world.width), clamp(data.y + offset, 0, world.height), data.name ?? "ROOM"]);
@@ -1291,6 +1331,9 @@ function hitResizeHandle(point) {
   const object = readSelection(selected);
   if (!isResizableSelection(selected, object)) return null;
   if (selected?.kind === "wall" && isSegmentWall(object)) {
+    return getResizeHandles(object).find((handle) => distance(point, handle) <= wallAnchorHitRadius)?.name ?? null;
+  }
+  if (selected?.kind === "occluder" && isSegmentWall(object)) {
     return getResizeHandles(object).find((handle) => distance(point, handle) <= wallAnchorHitRadius)?.name ?? null;
   }
   if (selected?.kind === "occluder" && hitOccluderDepthLine(point, object)) {
@@ -1360,6 +1403,14 @@ function resizeSelection(point) {
   const original = pointer.original;
   if (!original) return;
   if (selected?.kind === "wall" && isSegmentWall(original)) {
+    selectedEndpoint = { ref: { ...selected }, endpoint: pointer.handle };
+    writeSelection(selected, pointer.handle === "start"
+      ? { ...original, x: point.x, y: point.y, x2: original.x2, y2: original.y2 }
+      : { ...original, x: original.x, y: original.y, x2: point.x, y2: point.y });
+    updateExport();
+    return;
+  }
+  if (selected?.kind === "occluder" && isSegmentWall(original)) {
     selectedEndpoint = { ref: { ...selected }, endpoint: pointer.handle };
     writeSelection(selected, pointer.handle === "start"
       ? { ...original, x: point.x, y: point.y, x2: original.x2, y2: original.y2 }
@@ -1460,7 +1511,7 @@ function draw() {
   drawImageRect(map.foregroundImage, isSelected("foreground", 0));
   map.walls.forEach((wall, index) => drawWall(wall, isSelected("wall", index)));
   map.occluders.forEach((occluder, index) => drawOccluder(occluder, isSelected("occluder", index)));
-  if (activeTool === "wall" || activeTool === "barrier" || pointer?.mode === "drawSegment") drawWallAnchors();
+  if (activeTool === "wall" || activeTool === "barrier" || activeTool === "occluder" || pointer?.mode === "drawSegment") drawWallAnchors();
   map.labels.forEach((label, index) => drawLabel(label, isSelected("label", index)));
   map.batteries.forEach((battery, index) => drawPoint(battery, "#f4b35d", "B", isSelected("battery", index)));
   drawPoint(map.player, "#7ae4d6", "P", isSelected("player", 0), runtimeFootprints.investigator, "Host Investigator footprint");
@@ -1477,15 +1528,27 @@ function draw() {
     }
   }
   if (pointer?.mode === "drawSegment") {
-    drawWall({
-      shape: "segment",
-      x: pointer.start.x,
-      y: pointer.start.y,
-      x2: pointer.current.x,
-      y2: pointer.current.y,
-      thickness: pointer.kind === "barrier" ? defaultBarrierThickness : defaultWallThickness,
-      visible: pointer.kind !== "barrier"
-    }, true);
+    if (pointer.kind === "occluder") {
+      drawOccluder(normalizeOccluder({
+        shape: "segment",
+        x: pointer.start.x,
+        y: pointer.start.y,
+        x2: pointer.current.x,
+        y2: pointer.current.y,
+        thickness: defaultOccluderThickness,
+        name: "Occluder"
+      }), true);
+    } else {
+      drawWall({
+        shape: "segment",
+        x: pointer.start.x,
+        y: pointer.start.y,
+        x2: pointer.current.x,
+        y2: pointer.current.y,
+        thickness: pointer.kind === "barrier" ? defaultBarrierThickness : defaultWallThickness,
+        visible: pointer.kind !== "barrier"
+      }, true);
+    }
   }
   if (pointer?.mode === "marquee") {
     drawMarquee(normalizeRect(pointer.start, pointer.current));
@@ -1538,7 +1601,7 @@ function drawMarquee(rect) {
 
 function drawWallAnchors() {
   ctx.save();
-  ctx.fillStyle = activeTool === "barrier" ? "#e76f8a" : "#fff4cf";
+  ctx.fillStyle = activeTool === "barrier" ? "#e76f8a" : activeTool === "occluder" ? "#c7a8ff" : "#fff4cf";
   ctx.strokeStyle = "#061014";
   ctx.lineWidth = 2;
   ctx.globalAlpha = 0.9;
@@ -1627,6 +1690,32 @@ function drawRect(rect, fill, stroke, selectedState, dashed = false) {
 
 function drawOccluder(occluder, selectedState) {
   ctx.save();
+  if (isSegmentWall(occluder)) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = occluderThickness(occluder);
+    ctx.strokeStyle = "rgba(199,168,255,0.13)";
+    ctx.beginPath();
+    ctx.moveTo(occluder.x, occluder.y);
+    ctx.lineTo(occluder.x2, occluder.y2);
+    ctx.stroke();
+    ctx.lineWidth = selectedState ? 5 : 2;
+    ctx.strokeStyle = selectedState ? "#fff4cf" : "#c7a8ff";
+    ctx.setLineDash(selectedState ? [] : [14, 8]);
+    ctx.beginPath();
+    ctx.moveTo(occluder.x, occluder.y);
+    ctx.lineTo(occluder.x2, occluder.y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const cx = (occluder.x + occluder.x2) / 2;
+    const cy = (occluder.y + occluder.y2) / 2;
+    ctx.fillStyle = "#f8fbfd";
+    ctx.font = "900 10px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("OCCLUDER", cx, cy - 8);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = "rgba(199,168,255,0.12)";
   ctx.strokeStyle = selectedState ? "#fff4cf" : "#c7a8ff";
   ctx.lineWidth = selectedState ? 5 : 2;
@@ -1790,11 +1879,11 @@ function syncInspector() {
   inspectorEmpty.hidden = Boolean(object);
   inspectorFields.hidden = !object;
   if (!object) return;
-  const rectLike = (selected.kind === "wall" && !isSegmentWall(object)) || selected.kind === "prop" || selected.kind === "decoration" || selected.kind === "background" || selected.kind === "foreground" || selected.kind === "occluder";
+  const rectLike = (selected.kind === "wall" && !isSegmentWall(object)) || selected.kind === "prop" || selected.kind === "decoration" || selected.kind === "background" || selected.kind === "foreground" || (selected.kind === "occluder" && !isSegmentWall(object));
   const nameLike = ["player", "investigator", "battery", "label", "anomaly", "decoration", "background", "foreground", "occluder"].includes(selected.kind);
   const colorLike = selected.kind === "prop" || selected.kind === "investigator";
   const opacityLike = selected.kind === "decoration" || selected.kind === "background" || selected.kind === "foreground";
-  inspector.type.value = selected.kind === "wall" && object.visible === false ? "Invisible Barrier" : selected.kind === "wall" && isSegmentWall(object) ? "Angled Wall" : titleCase(selected.kind);
+  inspector.type.value = selected.kind === "wall" && object.visible === false ? "Invisible Barrier" : selected.kind === "wall" && isSegmentWall(object) ? "Angled Wall" : selected.kind === "occluder" && isSegmentWall(object) ? "Segment Occluder" : titleCase(selected.kind);
   inspector.x.value = Math.round(object.x);
   inspector.y.value = Math.round(object.y);
   inspector.w.value = Math.round(object.w ?? 0);
@@ -2050,10 +2139,14 @@ function toTiledMap() {
         type: "occluder",
         x: occluder.x,
         y: occluder.y,
-        width: occluder.w,
-        height: occluder.h,
+        width: isSegmentWall(occluder) ? Math.abs(occluder.x2 - occluder.x) : occluder.w,
+        height: isSegmentWall(occluder) ? Math.abs(occluder.y2 - occluder.y) : occluder.h,
         properties: makeProperties({
-          depthY: String(occluder.depthY ?? occluder.y + occluder.h)
+          depthY: isSegmentWall(occluder) ? "" : String(occluder.depthY ?? occluder.y + occluder.h),
+          shape: isSegmentWall(occluder) ? "segment" : "",
+          x2: isSegmentWall(occluder) ? String(occluder.x2) : "",
+          y2: isSegmentWall(occluder) ? String(occluder.y2) : "",
+          thickness: isSegmentWall(occluder) ? String(occluderThickness(occluder)) : ""
         })
       }))),
       objectLayer("spawns", [
@@ -2158,14 +2251,22 @@ function fromTiledMap(tiled) {
       opacity: Number(prop(object, "opacity", 1)),
       rotation: Number(prop(object, "rotation", 0))
     })),
-    occluders: objects("occluders", "occluder").map((object, index) => normalizeOccluder({
-      name: object.name || `Occluder ${index + 1}`,
-      x: Math.round(object.x ?? 0),
-      y: Math.round(object.y ?? 0),
-      w: Math.round(object.width ?? 96),
-      h: Math.round(object.height ?? 96),
-      depthY: Number(prop(object, "depthY", Number(object.y ?? 0) + Number(object.height ?? 96)))
-    })),
+    occluders: objects("occluders", "occluder").map((object, index) => {
+      const x2 = prop(object, "x2", "");
+      const y2 = prop(object, "y2", "");
+      return normalizeOccluder({
+        name: object.name || `Occluder ${index + 1}`,
+        shape: prop(object, "shape", ""),
+        x: Math.round(object.x ?? 0),
+        y: Math.round(object.y ?? 0),
+        ...(x2 !== "" ? { x2: Number(x2) } : {}),
+        ...(y2 !== "" ? { y2: Number(y2) } : {}),
+        thickness: Number(prop(object, "thickness", defaultOccluderThickness)),
+        w: Math.round(object.width ?? 96),
+        h: Math.round(object.height ?? 96),
+        depthY: Number(prop(object, "depthY", Number(object.y ?? 0) + Number(object.height ?? 96)))
+      });
+    }),
     music: prop(tiled, "musicSrc", "") ? {
       name: prop(tiled, "musicName", "Map Music"),
       src: prop(tiled, "musicSrc", ""),
@@ -2398,6 +2499,11 @@ function wallThickness(wall) {
   return Number.isFinite(thickness) ? thickness : fallback;
 }
 
+function occluderThickness(occluder) {
+  const thickness = Number(occluder?.thickness ?? defaultOccluderThickness);
+  return Number.isFinite(thickness) ? thickness : defaultOccluderThickness;
+}
+
 function normalizeWall(wall) {
   if (isSegmentWall(wall)) {
     return {
@@ -2454,6 +2560,17 @@ function normalizeImageRect(rect) {
 }
 
 function normalizeOccluder(occluder) {
+  if (isSegmentWall(occluder)) {
+    return {
+      shape: "segment",
+      x: clamp(Math.round(Number(occluder.x ?? 0)), 0, world.width),
+      y: clamp(Math.round(Number(occluder.y ?? 0)), 0, world.height),
+      x2: clamp(Math.round(Number(occluder.x2 ?? occluder.x ?? 0)), 0, world.width),
+      y2: clamp(Math.round(Number(occluder.y2 ?? occluder.y ?? 0)), 0, world.height),
+      thickness: clamp(Math.round(Number(occluder.thickness ?? defaultOccluderThickness)), 8, 240),
+      name: String(occluder.name ?? "Occluder")
+    };
+  }
   const base = clampRect(occluder);
   return {
     ...base,
@@ -2780,7 +2897,7 @@ function getLayerRows() {
   return [
     ...(map.backgroundImage ? [{ ref: { kind: "background", index: 0 }, name: map.backgroundImage.name || "Floor Image", kind: "Floor" }] : []),
     ...(map.foregroundImage ? [{ ref: { kind: "foreground", index: 0 }, name: map.foregroundImage.name || "Foreground Image", kind: "Foreground" }] : []),
-    ...map.occluders.map((item, index) => ({ ref: { kind: "occluder", index }, name: item.name || `Occluder ${index + 1}`, kind: "Occluder" })).reverse(),
+    ...map.occluders.map((item, index) => ({ ref: { kind: "occluder", index }, name: item.name || `Occluder ${index + 1}`, kind: isSegmentWall(item) ? "Segment Occluder" : "Occluder" })).reverse(),
     ...map.decorations.map((item, index) => ({ ref: { kind: "decoration", index }, name: item.name || `Image ${index + 1}`, kind: "Image" })).reverse(),
     ...map.props.map((item, index) => ({ ref: { kind: "prop", index }, name: `Prop ${index + 1}`, kind: "Prop" })).reverse(),
     ...map.walls.map((item, index) => ({ ref: { kind: "wall", index }, name: item.visible === false ? `Barrier ${index + 1}` : `Wall ${index + 1}`, kind: item.visible === false ? "Barrier" : "Wall" })).reverse(),
@@ -2911,6 +3028,17 @@ function selectionBounds(ref) {
       h: Math.abs(object.y2 - object.y) + pad * 2
     };
   }
+  if (ref.kind === "occluder" && isSegmentWall(object)) {
+    const pad = occluderThickness(object) / 2 + 4;
+    const x = Math.min(object.x, object.x2) - pad;
+    const y = Math.min(object.y, object.y2) - pad;
+    return {
+      x,
+      y,
+      w: Math.abs(object.x2 - object.x) + pad * 2,
+      h: Math.abs(object.y2 - object.y) + pad * 2
+    };
+  }
   if (Number.isFinite(object.w) && Number.isFinite(object.h)) {
     return { x: object.x, y: object.y, w: object.w, h: object.h };
   }
@@ -2990,6 +3118,11 @@ function pointInRect(point, rect) {
 function pointInWall(point, wall) {
   if (!isSegmentWall(wall)) return pointInRect(point, wall);
   return distancePointToSegment(point.x, point.y, wall.x, wall.y, wall.x2, wall.y2) <= wallThickness(wall) / 2 + 5;
+}
+
+function pointInOccluder(point, occluder) {
+  if (!isSegmentWall(occluder)) return pointInRect(point, occluder);
+  return distancePointToSegment(point.x, point.y, occluder.x, occluder.y, occluder.x2, occluder.y2) <= occluderThickness(occluder) / 2 + 5;
 }
 
 function pointInBlocker(point, blocker) {

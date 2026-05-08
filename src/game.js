@@ -3858,9 +3858,7 @@ function drawOcclusionOverlays() {
       continue;
     }
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
-    ctx.clip();
+    clipOccluder(occluder);
     drawMapImage(source);
     drawLightingWashes();
     drawAmbientDarkness();
@@ -3868,10 +3866,67 @@ function drawOcclusionOverlays() {
   }
 }
 
+function clipOccluder(occluder) {
+  ctx.beginPath();
+  if (isSegmentWall(occluder)) {
+    const polygon = segmentOccluderPolygon(occluder);
+    ctx.moveTo(polygon[0].x, polygon[0].y);
+    for (const point of polygon.slice(1)) {
+      ctx.lineTo(point.x, point.y);
+    }
+    ctx.closePath();
+  } else {
+    ctx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
+  }
+  ctx.clip();
+}
+
 function actorBehindOccluder(actor, occluder) {
-  const depthY = Number(occluder.depthY ?? occluder.y + occluder.h);
   const bounds = getActorVisualBounds(actor);
-  return getActorOcclusionDepthY(actor, bounds) < depthY && boundsOverlap(bounds, occluder);
+  const depthY = getActorOcclusionDepthY(actor, bounds);
+  return depthY < occluderDepthYAt(occluder, actor.x, depthY) && boundsOverlap(bounds, occluderBounds(occluder));
+}
+
+function occluderDepthYAt(occluder, x, y) {
+  if (!isSegmentWall(occluder)) {
+    return Number(occluder.depthY ?? occluder.y + occluder.h);
+  }
+  return closestPointOnSegment(x, y, occluder.x, occluder.y, occluder.x2, occluder.y2).y;
+}
+
+function occluderBounds(occluder) {
+  if (!isSegmentWall(occluder)) {
+    return occluder;
+  }
+  const pad = occluderThickness(occluder) / 2;
+  const x = Math.min(occluder.x, occluder.x2) - pad;
+  const y = Math.min(occluder.y, occluder.y2) - pad;
+  return {
+    x,
+    y,
+    w: Math.abs(occluder.x2 - occluder.x) + pad * 2,
+    h: Math.abs(occluder.y2 - occluder.y) + pad * 2
+  };
+}
+
+function segmentOccluderPolygon(occluder) {
+  const thickness = occluderThickness(occluder);
+  const dx = occluder.x2 - occluder.x;
+  const dy = occluder.y2 - occluder.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const px = (-dy / len) * (thickness / 2);
+  const py = (dx / len) * (thickness / 2);
+  return [
+    { x: occluder.x + px, y: occluder.y + py },
+    { x: occluder.x2 + px, y: occluder.y2 + py },
+    { x: occluder.x2 - px, y: occluder.y2 - py },
+    { x: occluder.x - px, y: occluder.y - py }
+  ];
+}
+
+function occluderThickness(occluder) {
+  const thickness = Number(occluder?.thickness ?? 96);
+  return Number.isFinite(thickness) ? thickness : 96;
 }
 
 function getActorOcclusionDepthY(actor, bounds = getActorVisualBounds(actor)) {
