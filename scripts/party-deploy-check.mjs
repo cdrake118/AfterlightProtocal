@@ -17,7 +17,7 @@ const serverSource = await readFile(serverPath, "utf8");
 const checks = [
   check("Railway Config", Boolean(railway.deploy), "railway.json has a deploy section."),
   check("Build Builder", railway.build?.builder === "RAILPACK", "Railway uses Railpack for the Node party server."),
-  check("Start Command", railway.deploy?.startCommand === "npm start", "Railway deploy startCommand is npm start."),
+  check("Start Command", railway.deploy?.startCommand === "node server.js", "Railway starts the party server directly with node server.js."),
   check("Healthcheck Path", railway.deploy?.healthcheckPath === "/healthz", "Railway health check points at /healthz."),
   check("Healthcheck Timeout", Number(railway.deploy?.healthcheckTimeout ?? 0) >= 30, "Railway health check timeout leaves room for cold starts."),
   check("Restart Policy", railway.deploy?.restartPolicyType === "ON_FAILURE", "Railway restarts failed party server processes."),
