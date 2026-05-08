@@ -22,7 +22,22 @@ const lastLoadedMapKey = "afterlight-map-builder-last-loaded";
 const assetTrayKey = "afterlight-map-builder-assets";
 const playtestMapKey = "afterlight-playtest-map";
 const playtestOptionsKey = "afterlight-playtest-options";
+const snapModePreferenceKey = "afterlight-map-builder-snap-mode";
 const historyLimit = 50;
+const anomalyAtlasSrc = "assets/characters/anomaly-ghost-atlas.png";
+const anomalyAtlasFrame = 128;
+const anomalyPreviewScale = 0.85;
+const investigatorPreview = {
+  width: 56,
+  height: 88,
+  radius: 10,
+  shadowWidth: 24,
+  shadowHeight: 6
+};
+const anomalyPreview = {
+  size: 98 * anomalyPreviewScale,
+  radius: 10
+};
 
 const defaultEvent = {
   name: "Storm Flash",
@@ -156,6 +171,7 @@ const inspector = {
   depthField: document.querySelector("#depthField")
 };
 
+restoreSnapPreference();
 wireControls();
 const restoredLastMap = restoreLastLoadedMap();
 syncPlaytestOptionsForm();
@@ -254,10 +270,20 @@ function wireControls() {
     changed(false);
   });
   gridToggle.addEventListener("change", draw);
-  snapToggle.addEventListener("change", draw);
+  snapToggle.addEventListener("change", () => {
+    if (!snapToggle.checked) {
+      snapMode.value = "off";
+    } else if (snapMode.value === "off") {
+      snapMode.value = "grid";
+    }
+    persistSnapPreference();
+    draw();
+  });
   snapMode.addEventListener("change", () => {
     snapToggle.checked = snapMode.value !== "off";
+    persistSnapPreference();
     markStatus(`${snapMode.selectedOptions[0].textContent} snap`);
+    draw();
   });
   assetTrayEl.addEventListener("click", (event) => {
     const button = event.target.closest("[data-asset-index]");
@@ -729,6 +755,18 @@ function updateImageStatus(element, image, label) {
   element.textContent = image?.src ? `${label}: ${image.name || "image"}` : `${label}: none`;
 }
 
+function restoreSnapPreference() {
+  const saved = localStorage.getItem(snapModePreferenceKey);
+  if (saved && [...snapMode.options].some((option) => option.value === saved)) {
+    snapMode.value = saved;
+  }
+  snapToggle.checked = snapMode.value !== "off";
+}
+
+function persistSnapPreference() {
+  localStorage.setItem(snapModePreferenceKey, snapMode.value);
+}
+
 function preloadImage(src) {
   if (!src || imageCache.has(src)) return imageCache.get(src) ?? null;
   const image = new Image();
@@ -1058,10 +1096,14 @@ function collectSnapGuides() {
 }
 
 function hitTest(point) {
+  const actorHits = actorPreviewEntries();
+  for (let i = actorHits.length - 1; i >= 0; i -= 1) {
+    const actor = actorHits[i];
+    if (pointInActorPreview(point, actor)) {
+      return { ...actor.ref };
+    }
+  }
   const pointHits = [
-    { kind: "anomaly", index: 0, point: map.anomaly },
-    { kind: "player", index: 0, point: map.player },
-    ...map.investigators.map((spawn, index) => ({ kind: "investigator", index, point: spawn })),
     ...map.batteries.map((spawn, index) => ({ kind: "battery", index, point: spawn })),
     ...map.labels.map((label, index) => ({ kind: "label", index, point: label }))
   ];
@@ -1085,6 +1127,16 @@ function hitTest(point) {
     if (pointInOccluder(point, map.occluders[index])) return { kind: "occluder", index };
   }
   return null;
+}
+
+function pointInActorPreview(point, actor) {
+  const bounds = getActorPreviewBounds(actor);
+  const radius = getPointHitRadius(actor.ref.kind);
+  return (point.x >= bounds.x
+    && point.x <= bounds.x + bounds.w
+    && point.y >= bounds.y
+    && point.y <= bounds.y + bounds.h)
+    || distance(point, { x: actor.point[0], y: actor.point[1] }) <= radius;
 }
 
 function getPointHitRadius(kind) {
@@ -1630,14 +1682,14 @@ function draw() {
   map.decorations.forEach((decoration, index) => drawImageRect(decoration, isSelected("decoration", index)));
   map.props.forEach((prop, index) => drawRect(prop, prop.color, "#7ae4d6", isSelected("prop", index)));
   drawImageRect(map.foregroundImage, isSelected("foreground", 0));
+  drawActorPreviews();
+  drawActorOcclusionPreview();
   map.walls.forEach((wall, index) => drawWall(wall, isSelected("wall", index)));
   map.occluders.forEach((occluder, index) => drawOccluder(occluder, isSelected("occluder", index)));
+  drawActorPreviewControls();
   if (activeTool === "wall" || activeTool === "barrier" || pointer?.mode === "drawSegment") drawWallAnchors();
   map.labels.forEach((label, index) => drawLabel(label, isSelected("label", index)));
   map.batteries.forEach((battery, index) => drawPoint(battery, "#f4b35d", "B", isSelected("battery", index)));
-  drawPoint(map.player, "#7ae4d6", "P", isSelected("player", 0), runtimeFootprints.investigator, "Host Investigator footprint");
-  map.investigators.forEach((spawn, index) => drawPoint(spawn, spawn[2], "I", isSelected("investigator", index), runtimeFootprints.investigator, "Investigator footprint"));
-  drawPoint(map.anomaly, "#e76f8a", "A", isSelected("anomaly", 0), runtimeFootprints.anomaly, "Anomaly footprint");
   if (analysisOverlay) drawAnalysisOverlay();
   drawSelectionHandles();
   if (pointer?.mode === "drawRect") {
@@ -1926,6 +1978,343 @@ function drawImageRect(rect, selectedState) {
   ctx.setLineDash(rect === map.backgroundImage ? [18, 12] : []);
   ctx.strokeRect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
   ctx.restore();
+}
+
+function drawImageOnly(rect, options = {}) {
+  if (!rect?.src) return;
+  const image = preloadImage(rect.src);
+  if (!image?.complete || !image.naturalWidth) return;
+  ctx.save();
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const rotation = ((rect.rotation ?? 0) * Math.PI) / 180;
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.globalAlpha = options.forceAlpha ?? (Number.isFinite(rect.opacity) ? rect.opacity : 1);
+  ctx.drawImage(image, -rect.w / 2, -rect.h / 2, rect.w, rect.h);
+  ctx.restore();
+}
+
+function drawActorPreviews() {
+  for (const actor of actorPreviewEntries()) {
+    drawCharacterPreview(actor);
+  }
+}
+
+function actorPreviewEntries() {
+  return [
+    {
+      role: "investigator",
+      ref: { kind: "player", index: 0 },
+      point: map.player,
+      color: "#7ae4d6",
+      label: "P",
+      name: "Host Investigator"
+    },
+    ...map.investigators.map((spawn, index) => ({
+      role: "investigator",
+      ref: { kind: "investigator", index },
+      point: spawn,
+      color: spawn[2] ?? "#c7a8ff",
+      label: "I",
+      name: spawn[3] || `Investigator ${index + 2}`
+    })),
+    {
+      role: "anomaly",
+      ref: { kind: "anomaly", index: 0 },
+      point: map.anomaly,
+      color: "#e76f8a",
+      label: "A",
+      name: "Anomaly"
+    }
+  ];
+}
+
+function drawCharacterPreview(actor) {
+  if (actor.role === "anomaly") {
+    drawAnomalyPreview(actor);
+  } else {
+    drawInvestigatorPreview(actor);
+  }
+}
+
+function drawActorPreviewControls() {
+  for (const actor of actorPreviewEntries()) {
+    drawCharacterPreviewSelection(actor);
+  }
+}
+
+function drawInvestigatorPreview(actor) {
+  const [x, y] = actor.point;
+  const color = actor.color ?? "#7ae4d6";
+  const stride = Math.sin(performance.now() / 220 + x * 0.02 + y * 0.02) * 2;
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 3, investigatorPreview.shadowWidth, investigatorPreview.shadowHeight, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = darkenColor(color, 0.42);
+  ctx.lineWidth = 3;
+
+  ctx.beginPath();
+  ctx.moveTo(-7, -8);
+  ctx.lineTo(-12, -2 + stride);
+  ctx.moveTo(8, -8);
+  ctx.lineTo(13, -2 - stride);
+  ctx.stroke();
+
+  ctx.fillStyle = darkenColor(color, 0.18);
+  ctx.strokeStyle = "#071015";
+  ctx.beginPath();
+  ctx.roundRect(-15, -56, 30, 46, 12);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(0, -65, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(5, 8, 12, 0.74)";
+  ctx.beginPath();
+  ctx.roundRect(-8, -68, 16, 9, 4);
+  ctx.fill();
+
+  ctx.strokeStyle = lightenColor(color, 0.36);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(10, -43);
+  ctx.lineTo(15, -43);
+  ctx.stroke();
+
+  ctx.fillStyle = "#e9fbff";
+  ctx.strokeStyle = "#071015";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(15, -49, 22, 12, 5);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = lightenColor(color, 0.28);
+  ctx.beginPath();
+  ctx.roundRect(-12, -31, 24, 10, 5);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawAnomalyPreview(actor) {
+  const [x, y] = actor.point;
+  const image = preloadImage(anomalyAtlasSrc);
+  ctx.save();
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 12, 32, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.shadowColor = "#7ae4d6";
+  ctx.shadowBlur = 18;
+  if (image?.complete && image.naturalWidth) {
+    const frame = Math.floor(performance.now() / 180) % 4;
+    const row = 1;
+    const size = anomalyPreview.size;
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(
+      image,
+      frame * anomalyAtlasFrame,
+      row * anomalyAtlasFrame,
+      anomalyAtlasFrame,
+      anomalyAtlasFrame,
+      -size / 2,
+      -size / 2,
+      size,
+      size
+    );
+  } else {
+    drawFallbackAnomalyPreview();
+  }
+  ctx.restore();
+}
+
+function drawFallbackAnomalyPreview() {
+  const pulse = Math.sin(performance.now() / 260) * 4;
+  const aura = ctx.createRadialGradient(0, 0, 8, 0, 0, 46 + pulse);
+  aura.addColorStop(0, "rgba(122, 228, 214, 0.34)");
+  aura.addColorStop(1, "rgba(122, 228, 214, 0)");
+  ctx.fillStyle = aura;
+  ctx.beginPath();
+  ctx.arc(0, 0, 50 + pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(159, 242, 231, 0.78)";
+  ctx.strokeStyle = "rgba(5, 44, 48, 0.82)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-24, -26);
+  ctx.quadraticCurveTo(6, -52, 29, -22);
+  ctx.quadraticCurveTo(45, 0, 24, 26);
+  ctx.quadraticCurveTo(8, 42, -18, 30);
+  ctx.quadraticCurveTo(-45, 15, -30, -12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawCharacterPreviewSelection(actor) {
+  const selectedState = isRefSelected(actor.ref);
+  const [x, y] = actor.point;
+  const radius = actor.role === "anomaly" ? anomalyPreview.radius : investigatorPreview.radius;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = selectedState ? "#fff4cf" : actor.color;
+  ctx.lineWidth = selectedState ? 4 : 2;
+  ctx.globalAlpha = selectedState ? 1 : 0.68;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius + 7, -0.8, 0.8);
+  ctx.stroke();
+  ctx.globalAlpha = selectedState ? 0.95 : 0.72;
+  ctx.fillStyle = selectedState ? "#fff4cf" : "rgba(5, 7, 10, 0.78)";
+  ctx.strokeStyle = selectedState ? "rgba(5, 7, 10, 0.9)" : actor.color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = selectedState ? "#071015" : "#f8fbfd";
+  ctx.font = "900 9px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(actor.label, 0, 0.5);
+  if (selectedState) {
+    ctx.fillStyle = "#fff4cf";
+    ctx.font = "900 10px Inter, sans-serif";
+    ctx.fillText(actor.name, 0, actor.role === "anomaly" ? -48 : -96);
+  }
+  ctx.restore();
+}
+
+function drawActorOcclusionPreview() {
+  if (!map.foregroundImage?.src || !map.occluders.length) {
+    return;
+  }
+  const actors = actorPreviewEntries();
+  for (const occluder of map.occluders) {
+    if (!actors.some((actor) => actorBehindOccluderPreview(actor, occluder))) {
+      continue;
+    }
+    ctx.save();
+    clipOccluderPreview(occluder);
+    drawImageOnly(map.foregroundImage);
+    ctx.restore();
+  }
+}
+
+function actorBehindOccluderPreview(actor, occluder) {
+  const bounds = getActorPreviewBounds(actor);
+  const depthY = actor.role === "anomaly" ? actor.point[1] + anomalyPreview.radius : actor.point[1];
+  return depthY < occluderDepthYAtPreview(occluder, actor.point[0], depthY) && boundsOverlap(bounds, occluderBounds(occluder));
+}
+
+function getActorPreviewBounds(actor) {
+  const [x, y] = actor.point;
+  if (actor.role === "anomaly") {
+    const size = anomalyPreview.size;
+    return { x: x - size / 2, y: y - size / 2, w: size, h: size };
+  }
+  return {
+    x: x - investigatorPreview.width / 2,
+    y: y - investigatorPreview.height,
+    w: investigatorPreview.width,
+    h: investigatorPreview.height + 10
+  };
+}
+
+function occluderDepthYAtPreview(occluder, x, y) {
+  if (!isSegmentWall(occluder)) {
+    return Number(occluder.depthY ?? occluder.y + occluder.h);
+  }
+  return closestPointOnSegment(x, y, occluder.x, occluder.y, occluder.x2, occluder.y2).y;
+}
+
+function occluderBounds(occluder) {
+  if (!isSegmentWall(occluder)) {
+    return occluder;
+  }
+  const pad = occluderThickness(occluder) / 2;
+  return {
+    x: Math.min(occluder.x, occluder.x2) - pad,
+    y: Math.min(occluder.y, occluder.y2) - pad,
+    w: Math.abs(occluder.x2 - occluder.x) + pad * 2,
+    h: Math.abs(occluder.y2 - occluder.y) + pad * 2
+  };
+}
+
+function clipOccluderPreview(occluder) {
+  ctx.beginPath();
+  if (isSegmentWall(occluder)) {
+    const thickness = occluderThickness(occluder);
+    const dx = occluder.x2 - occluder.x;
+    const dy = occluder.y2 - occluder.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const px = (-dy / length) * (thickness / 2);
+    const py = (dx / length) * (thickness / 2);
+    ctx.moveTo(occluder.x + px, occluder.y + py);
+    ctx.lineTo(occluder.x2 + px, occluder.y2 + py);
+    ctx.lineTo(occluder.x2 - px, occluder.y2 - py);
+    ctx.lineTo(occluder.x - px, occluder.y - py);
+    ctx.closePath();
+  } else {
+    ctx.rect(occluder.x, occluder.y, occluder.w, occluder.h);
+  }
+  ctx.clip();
+}
+
+function boundsOverlap(a, b) {
+  return a.x + a.w >= b.x
+    && a.x <= b.x + b.w
+    && a.y + a.h >= b.y
+    && a.y <= b.y + b.h;
+}
+
+function lightenColor(color, amount) {
+  return mixColor(color, "#ffffff", amount);
+}
+
+function darkenColor(color, amount) {
+  return mixColor(color, "#000000", amount);
+}
+
+function mixColor(color, target, amount) {
+  const source = parseHexColor(color);
+  const destination = parseHexColor(target);
+  if (!source || !destination) {
+    return color;
+  }
+  const channel = (a, b) => Math.round(a + (b - a) * amount).toString(16).padStart(2, "0");
+  return `#${channel(source.r, destination.r)}${channel(source.g, destination.g)}${channel(source.b, destination.b)}`;
+}
+
+function parseHexColor(color) {
+  const match = /^#?([a-f0-9]{6})$/i.exec(color);
+  if (!match) {
+    return null;
+  }
+  const value = Number.parseInt(match[1], 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
 }
 
 function drawPoint(point, color, label, selectedState, footprint = null, title = "") {
