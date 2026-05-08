@@ -25,8 +25,12 @@ const soundEffectDefinitions = [
 let soundLibrary = [];
 let assignments = {};
 let saveTimer = 0;
+let previewAudio = null;
+let previewButton = null;
+let previewSrc = "";
 
 const uploadBtn = document.querySelector("#uploadBtn");
+const playLibraryBtn = document.querySelector("#playLibraryBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
 const deleteBtn = document.querySelector("#deleteBtn");
 const soundFile = document.querySelector("#soundFile");
@@ -36,9 +40,11 @@ const saveStatus = document.querySelector("#saveStatus");
 const soundEffectsList = document.querySelector("#soundEffectsList");
 
 uploadBtn.addEventListener("click", () => soundFile.click());
+playLibraryBtn.addEventListener("click", playSelectedLibraryAudio);
 refreshBtn.addEventListener("click", () => refreshAll(true));
 deleteBtn.addEventListener("click", deleteSelectedSoundEffect);
 soundFile.addEventListener("change", importSoundEffectFile);
+soundEffectsList.addEventListener("click", handleAssignmentClick);
 soundEffectsList.addEventListener("change", handleAssignmentChange);
 soundEffectsList.addEventListener("input", handleVolumeInput);
 
@@ -109,6 +115,7 @@ function renderLibrary(preferred = librarySelect.value) {
 }
 
 function renderAssignments() {
+  stopPreview();
   soundEffectsList.innerHTML = "";
   for (const definition of soundEffectDefinitions) {
     const current = assignments[definition.id] ?? null;
@@ -152,10 +159,31 @@ function renderAssignments() {
     range.disabled = !current;
     range.dataset.soundVolume = definition.id;
 
-    row.append(top, select, range);
+    const playButton = document.createElement("button");
+    playButton.type = "button";
+    playButton.textContent = "Play";
+    playButton.disabled = !current;
+    playButton.dataset.playSoundEvent = definition.id;
+
+    const controls = document.createElement("div");
+    controls.className = "sound-row-controls";
+    controls.append(range, playButton);
+
+    row.append(top, select, controls);
     soundEffectsList.append(row);
   }
   setSaveStatus(`${Object.keys(assignments).length} assigned`);
+}
+
+function handleAssignmentClick(event) {
+  const button = event.target.closest("[data-play-sound-event]");
+  if (!button) return;
+  const effect = assignments[button.dataset.playSoundEvent];
+  if (!effect?.src) {
+    setSaveStatus("Choose audio first");
+    return;
+  }
+  playPreview(effect, button, setSaveStatus);
 }
 
 function handleAssignmentChange(event) {
@@ -195,6 +223,7 @@ async function deleteSelectedSoundEffect() {
     setLibraryStatus("Choose audio to remove");
     return;
   }
+  if (previewSrc === item.src) stopPreview();
   try {
     const response = await fetch(`/api/sound-effects/${encodeURIComponent(item.filename)}`, { method: "DELETE" });
     const payload = await response.json();
@@ -208,6 +237,51 @@ async function deleteSelectedSoundEffect() {
 
 function selectedSoundEffectItem() {
   return soundLibrary.find((item) => item.filename === librarySelect.value) ?? null;
+}
+
+function playSelectedLibraryAudio() {
+  const item = selectedSoundEffectItem();
+  if (!item?.src) {
+    setLibraryStatus("Choose audio to play");
+    return;
+  }
+  playPreview({ ...item, volume: 1 }, playLibraryBtn, setLibraryStatus);
+}
+
+function playPreview(entry, button, reportStatus) {
+  if (previewAudio && previewSrc === entry.src && !previewAudio.paused) {
+    stopPreview();
+    return;
+  }
+  stopPreview();
+  previewSrc = entry.src;
+  previewButton = button;
+  previewAudio = new Audio(entry.src);
+  previewAudio.volume = clamp(Number(entry.volume ?? 1), 0, 1);
+  previewAudio.addEventListener("ended", stopPreview, { once: true });
+  previewAudio.addEventListener("error", () => {
+    stopPreview();
+    reportStatus("Audio preview failed");
+  }, { once: true });
+  const play = previewAudio.play();
+  button.textContent = "Stop";
+  if (play?.catch) {
+    play.catch(() => {
+      stopPreview();
+      reportStatus("Audio preview blocked by browser");
+    });
+  }
+}
+
+function stopPreview() {
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio.currentTime = 0;
+  }
+  if (previewButton) previewButton.textContent = "Play";
+  previewAudio = null;
+  previewButton = null;
+  previewSrc = "";
 }
 
 function scheduleSave() {

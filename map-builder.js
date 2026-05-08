@@ -88,6 +88,8 @@ let lastPointerEvent = null;
 let componentClipboard = null;
 let activeSaveSlot = "";
 let musicLibrary = [];
+let musicPreviewAudio = null;
+let musicPreviewSrc = "";
 
 const imageCache = new Map();
 
@@ -202,6 +204,7 @@ function wireControls() {
   document.querySelector("#clearForegroundBtn").addEventListener("click", clearForeground);
   document.querySelector("#clearMusicBtn").addEventListener("click", clearMusic);
   document.querySelector("#useMusicBtn").addEventListener("click", useSelectedMusic);
+  document.querySelector("#previewMusicBtn").addEventListener("click", previewSelectedMusic);
   document.querySelector("#refreshMusicBtn").addEventListener("click", () => loadMusicLibrary(true));
   document.querySelector("#deleteMusicBtn").addEventListener("click", deleteSelectedMusic);
   document.querySelector("#saveNamedBtn").addEventListener("click", saveNamedMap);
@@ -217,6 +220,9 @@ function wireControls() {
       return;
     }
     map.music.volume = clamp(Number(mapMusicVolume.value), 0, 1);
+    if (musicPreviewAudio && musicPreviewSrc === map.music.src) {
+      musicPreviewAudio.volume = map.music.volume;
+    }
     updateMediaStatus();
     changed(false);
   });
@@ -451,6 +457,47 @@ function useSelectedMusic() {
   markStatus(`Using ${item.name}`);
 }
 
+function previewSelectedMusic() {
+  const button = document.querySelector("#previewMusicBtn");
+  const item = selectedMusicItem() ?? map.music;
+  if (!item?.src) {
+    markStatus("Choose server music first");
+    return;
+  }
+  if (musicPreviewAudio && musicPreviewSrc === item.src && !musicPreviewAudio.paused) {
+    stopMusicPreview();
+    return;
+  }
+  stopMusicPreview();
+  musicPreviewSrc = item.src;
+  musicPreviewAudio = new Audio(item.src);
+  musicPreviewAudio.volume = clamp(Number(map.music?.src === item.src ? map.music.volume : mapMusicVolume.value), 0, 1);
+  musicPreviewAudio.addEventListener("ended", stopMusicPreview, { once: true });
+  musicPreviewAudio.addEventListener("error", () => {
+    stopMusicPreview();
+    markStatus("Music preview failed");
+  }, { once: true });
+  const play = musicPreviewAudio.play();
+  button.textContent = "Stop";
+  if (play?.catch) {
+    play.catch(() => {
+      stopMusicPreview();
+      markStatus("Music preview blocked by browser");
+    });
+  }
+}
+
+function stopMusicPreview() {
+  if (musicPreviewAudio) {
+    musicPreviewAudio.pause();
+    musicPreviewAudio.currentTime = 0;
+  }
+  musicPreviewAudio = null;
+  musicPreviewSrc = "";
+  const button = document.querySelector("#previewMusicBtn");
+  if (button) button.textContent = "Play";
+}
+
 async function deleteSelectedMusic() {
   const item = selectedMusicItem();
   if (!item) {
@@ -460,6 +507,7 @@ async function deleteSelectedMusic() {
   if (map.music?.src === item.src) {
     map.music = null;
   }
+  if (musicPreviewSrc === item.src) stopMusicPreview();
   try {
     const response = await fetch(`/api/map-music/${encodeURIComponent(item.filename)}`, { method: "DELETE" });
     const payload = await response.json();
@@ -515,6 +563,7 @@ function clearMusic() {
     markStatus("No map music loaded");
     return;
   }
+  if (musicPreviewSrc === map.music.src) stopMusicPreview();
   map.music = null;
   updateMediaStatus();
   changed();

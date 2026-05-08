@@ -917,6 +917,9 @@ function beginMatch() {
   publishPresence("playing");
   publishMatchEvent("match_started", makeMatchSnapshot(), true);
   setStatus(playerRole === "Anomaly" ? "Anomaly link established" : "Investigator link established");
+  if (maps[currentMapName]?.music?.src && !soundEnabled) {
+    setStatus("Sound is off; turn on Sound to hear map music");
+  }
 }
 
 function endMatch(text) {
