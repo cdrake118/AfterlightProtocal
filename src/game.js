@@ -1927,6 +1927,11 @@ function updateAnomalyStateTimers(dt) {
       dropCarriedInvestigator();
     }
   }
+  if (anomaly.carryTimer > 0 && anomaly.carriedAgent) {
+    startLoopingSound("ghost_carry_loop", "ghost_carry_loop");
+  } else {
+    stopLoopingSound("ghost_carry_loop");
+  }
 
   const wasShocked = anomaly.shockTimer > 0;
   anomaly.shockTimer = Math.max(0, (anomaly.shockTimer ?? 0) - dt);
@@ -6806,6 +6811,7 @@ function getGeneratedSoundSettings(type) {
     relay: [520, 0.32, "sine", 0.08],
     signal: [260, 0.055, "sine", 0.04],
     lightning: [1180, 0.22, "sawtooth", 0.07],
+    ghost_carry_loop: [154, 0.28, "sawtooth", 0.04],
     revive_progress: [420, 0.18, "triangle", 0.045],
     revive: [680, 0.26, "triangle", 0.08],
     downed: [190, 0.22, "sawtooth", 0.07],

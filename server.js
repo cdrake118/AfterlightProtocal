@@ -45,6 +45,7 @@ const soundEffectEventIds = new Set([
   "ghost_escape",
   "ghost_escape_loop",
   "ghost_grab",
+  "ghost_carry_loop",
   "battery_spawn",
   "pickup",
   "round_intro",

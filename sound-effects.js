@@ -4,6 +4,7 @@ const soundEffectDefinitions = [
   { id: "ghost_escape", label: "Anomaly running away", bus: "sfx" },
   { id: "ghost_escape_loop", label: "Anomaly escape loop", bus: "sfx" },
   { id: "ghost_grab", label: "Investigator being caught", bus: "sfx" },
+  { id: "ghost_carry_loop", label: "Anomaly carrying investigator", bus: "sfx" },
   { id: "battery_spawn", label: "Battery spawning", bus: "sfx" },
   { id: "pickup", label: "Battery being picked up", bus: "sfx" },
   { id: "round_intro", label: "Game intro music", bus: "music" },
