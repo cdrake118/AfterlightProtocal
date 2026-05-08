@@ -10,6 +10,7 @@ const soundEffectDefinitions = [
   { id: "round_outro", label: "Game outro music", bus: "music" },
   { id: "flashlight_on", label: "Flashlight turned on", bus: "sfx" },
   { id: "flashlight_off", label: "Flashlight turned off", bus: "sfx" },
+  { id: "revive_progress", label: "Investigator being revived", bus: "sfx" },
   { id: "revive", label: "Investigator revived", bus: "sfx" },
   { id: "downed", label: "Investigator downed", bus: "sfx" },
   { id: "blackout", label: "Anomaly blackout", bus: "sfx" },

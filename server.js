@@ -51,6 +51,7 @@ const soundEffectEventIds = new Set([
   "round_outro",
   "flashlight_on",
   "flashlight_off",
+  "revive_progress",
   "revive",
   "downed",
   "blackout",

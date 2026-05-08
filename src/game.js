@@ -711,6 +711,7 @@ function makeAgent(x, y, color, name) {
     lightOn: false,
     lastLightOn: false,
     reviveProgress: 0,
+    reviveSoundCooldown: 0,
     color,
     name,
     ai: false,
@@ -2087,8 +2088,10 @@ function resolveRevives(dt) {
   for (const agent of getInvestigators()) {
     if (agent.resolve > 0) {
       agent.reviveProgress = 0;
+      agent.reviveSoundCooldown = 0;
       continue;
     }
+    agent.reviveSoundCooldown = Math.max(0, (agent.reviveSoundCooldown ?? 0) - dt);
     agent.reviveProgress = Math.max(0, agent.reviveProgress - dt * 0.18);
   }
 
@@ -2120,6 +2123,10 @@ function getReviveRate(helper) {
 }
 
 function advanceRevive(target, amount, helper) {
+  if ((target.reviveSoundCooldown ?? 0) <= 0) {
+    playSound("revive_progress");
+    target.reviveSoundCooldown = 0.65;
+  }
   target.reviveProgress += amount;
   createRing(target.x, target.y, "#7ae4d6", 52, 0.32);
   if (target.reviveProgress >= reviveSeconds) {
@@ -6721,6 +6728,7 @@ function playSound(type) {
     relay: [520, 0.32, "sine", 0.08],
     signal: [260, 0.055, "sine", 0.04],
     lightning: [1180, 0.22, "sawtooth", 0.07],
+    revive_progress: [420, 0.18, "triangle", 0.045],
     revive: [680, 0.26, "triangle", 0.08],
     downed: [190, 0.22, "sawtooth", 0.07],
     battery_spawn: [980, 0.16, "triangle", 0.06],
