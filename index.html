@@ -41,10 +41,6 @@
             <span>Battery</span>
             <meter id="batteryMeter" min="0" max="125" value="125"></meter>
           </div>
-          <div class="meter-group resolve-stat">
-            <span>Resolve</span>
-            <meter id="resolveMeter" min="0" max="100" value="100"></meter>
-          </div>
           <div class="meter-group signal-stat">
             <span>Signal</span>
             <meter id="signalMeter" min="0" max="100" value="0"></meter>
@@ -157,17 +153,17 @@
                     <li>Stand near a collapsed teammate to revive them over time.</li>
                     <li>Warning icons appear over investigators when the anomaly is close.</li>
                     <li>AI teammates revive, resupply, search, and pressure the anomaly during solo testing.</li>
-                    <li>Use world prompts and teammate tags to read objectives quickly.</li>
+                    <li>Use world prompts and warning icons to read objectives quickly.</li>
                     <li>Host or join from the lobby browser, quick join, or an invite code.</li>
                     <li>Cycle Suit in the lobby to change your investigator colorway.</li>
                   </ul>
                 </article>
                 <article>
                   <h2>Anomaly</h2>
-                  <p>Stay hidden, collapse investigator resolve, and use the arena to break line of sight.</p>
+                  <p>Stay hidden, collapse investigators, and use the arena to break line of sight.</p>
                   <ul>
                     <li>Move with WASD or arrow keys.</li>
-                    <li>You move 15% faster than investigators.</li>
+                    <li>You move at the same base speed as investigators.</li>
                     <li>Controller: left stick move, A dash, Y or LB blackout.</li>
                     <li>Touch investigators to instantly collapse them.</li>
                     <li>Press Space to dash.</li>
@@ -183,11 +179,11 @@
                   <ul>
                     <li>Battery does not recharge on its own; one pickup starts on the map, then low battery can call in another after a 30-second cooldown.</li>
                     <li>When only one investigator remains active, an Overcharge battery can appear for a short comeback window.</li>
-                    <li>Solo investigators start with extra lives for local testing.</li>
+                    <li>Investigators can be revived as long as at least one teammate remains active.</li>
                     <li>Flashlights, arena events, and close contact reveal the anomaly.</li>
                     <li>Each arena has a timed event that can expose, distort, or misdirect the hunt.</li>
                     <li>Walls and lab equipment block light and pulse checks.</li>
-                    <li>The round ends when anomaly health or tracker resolve runs out; timeout is a draw.</li>
+                    <li>The round ends when anomaly health reaches zero or every investigator is collapsed; timeout is a draw.</li>
                   </ul>
                 </article>
                 <article>

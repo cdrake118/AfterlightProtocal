@@ -13,7 +13,6 @@ const timerEl = document.querySelector("#timer");
 const anomalyMeter = document.querySelector("#anomalyMeter");
 const anomalyHealthPercent = document.querySelector("#anomalyHealthPercent");
 const batteryMeter = document.querySelector("#batteryMeter");
-const resolveMeter = document.querySelector("#resolveMeter");
 const signalMeter = document.querySelector("#signalMeter");
 const abilityMeter = document.querySelector("#abilityMeter");
 const eventName = document.querySelector("#eventName");
@@ -199,9 +198,7 @@ const GameBalance = {
     flashlightDamagePerSecond: 18.4,
     aiFlashlightDamagePerSecond: 6.325,
     reviveDurationSeconds: 2.2,
-    reviveRange: 72,
-    soloLives: 3,
-    duoLives: 2
+    reviveRange: 72
   },
   warning: {
     weakDistance: 190,
@@ -241,8 +238,6 @@ const proximityDangerRange = GameBalance.warning.strongDistance;
 const overchargeDuration = GameBalance.batteries.overchargeDurationSeconds;
 const overchargeDamageMultiplier = GameBalance.batteries.overchargeDamageMultiplier;
 const overchargeReviveMultiplier = GameBalance.batteries.overchargeReviveMultiplier;
-const soloInvestigatorLives = GameBalance.tracker.soloLives;
-const duoInvestigatorLives = GameBalance.tracker.duoLives;
 const navCellSize = 44;
 const investigatorMoveSpeed = GameBalance.tracker.moveSpeed;
 const anomalyMoveSpeed = GameBalance.ghost.moveSpeed;
@@ -648,7 +643,6 @@ function makeStats() {
     relaysCharged: 0,
     relaysCorrupted: 0,
     ghostCatches: 0,
-    livesSpent: 0,
     lightningReveals: 0,
     batteryEvents: [],
     ghostAttackEvents: [],
@@ -699,8 +693,6 @@ function makeAgent(x, y, color, name) {
     abilityCooldown: 0,
     battery: maxBatteryCapacity,
     overcharge: 0,
-    lives: 1,
-    maxLives: 1,
     invulnerable: 0,
     carriedByAnomaly: false,
     catchPressure: 0,
@@ -725,12 +717,6 @@ function makeAgent(x, y, color, name) {
     probeTimer: 0,
     probeCooldown: randomRange(aiProbeMinCooldown, aiProbeMaxCooldown)
   };
-}
-
-function configureInvestigatorLives(agent, isBot) {
-  const lives = isBot ? 1 : getHumanInvestigatorCount() <= 1 ? soloInvestigatorLives : getHumanInvestigatorCount() === 2 ? duoInvestigatorLives : 1;
-  agent.maxLives = lives;
-  agent.lives = lives;
 }
 
 function getHumanInvestigatorCount() {
@@ -778,13 +764,8 @@ function resetMatch() {
   state.time = matchDuration;
   countdown = 0;
   state.player = makeAgent(map.player[0], map.player[1], playerSuit.color, "Player");
-  configureInvestigatorLives(state.player, false);
   state.anomaly = makeAnomaly();
-  state.investigators = map.investigators.map(([x, y, color, name]) => {
-    const agent = { ...makeAgent(x, y, color, name), ai: true };
-    configureInvestigatorLives(agent, true);
-    return agent;
-  });
+  state.investigators = map.investigators.map(([x, y, color, name]) => ({ ...makeAgent(x, y, color, name), ai: true }));
   state.batteries = map.batteries.map(([x, y]) => makeBattery(x, y, false));
   batterySpawnTimer = batterySpawnInterval;
   for (let i = 0; i < startingBatteryPickups; i += 1) {
@@ -1846,32 +1827,6 @@ function setInvestigatorLight(agent, enabled) {
   }
   agent.lightOn = next;
   agent.lastLightOn = next;
-}
-
-function spendInvestigatorLife(agent) {
-  recordGhostAttack(agent, "life_spent");
-  if (state.anomaly.carriedAgent === agent) {
-    state.anomaly.carriedAgent = null;
-    state.anomaly.carryTimer = 0;
-  }
-  agent.carriedByAnomaly = false;
-  agent.lives -= 1;
-  agent.resolve = 64;
-  agent.battery = Math.max(agent.battery, maxBatteryCapacity * 0.45);
-  agent.reviveProgress = 0;
-  setInvestigatorLight(agent, false);
-  agent.invulnerable = 1.8;
-  agent.x = agent.spawnX;
-  agent.y = agent.spawnY;
-  createRing(agent.x, agent.y, "#f4b35d", 86, 0.54);
-  burst(agent.x, agent.y, "#f4b35d", 18);
-  publishMatchEvent("investigator_life_spent", { name: agent.name, lives: agent.lives }, true);
-  state.stats.livesSpent += 1;
-  if (agent === state.player && playerRole === "Investigator") {
-    setStatus(`Caught. ${agent.lives} ${agent.lives === 1 ? "life" : "lives"} left`);
-  } else {
-    setStatus(`${agent.name} lost a life`);
-  }
 }
 
 function collapseInvestigator(agent) {
@@ -4627,11 +4582,6 @@ function drawInvestigator(agent) {
   drawInvestigatorHeldFlashlight(agent, down);
 
   ctx.save();
-  ctx.fillStyle = "rgba(5, 8, 12, 0.68)";
-  const barY = agent.y - investigatorVisual.barOffset;
-  ctx.fillRect(agent.x - 22, barY, 44, 5);
-  ctx.fillStyle = agent.resolve > 30 ? "#7ae4d6" : "#e76f8a";
-  ctx.fillRect(agent.x - 22, barY, 44 * (agent.resolve / 100), 5);
   if (down) {
     const progress = clamp(agent.reviveProgress / reviveSeconds, 0, 1);
     ctx.strokeStyle = "#7ae4d6";
@@ -4645,7 +4595,6 @@ function drawInvestigator(agent) {
     ctx.fillText("REVIVE", agent.x, agent.y - investigatorVisual.reviveLabelOffset);
   } else {
     drawProximityWarning(agent);
-    drawNameplate(agent.x, agent.y - investigatorVisual.nameplateOffset, agent.name, getInvestigatorStateLabel(agent, isPlayer), agent.color);
   }
   ctx.restore();
 }
@@ -4688,22 +4637,6 @@ function getInvestigatorFacingDirection(aim) {
     return y < 0 ? "up" : "down";
   }
   return x < 0 ? "left" : "right";
-}
-
-function getInvestigatorStateLabel(agent, isPlayer) {
-  if (agent.carriedByAnomaly) {
-    return "grabbed";
-  }
-  if (agent.invulnerable > 0 && agent.resolve > 0) {
-    return `safe ${Math.ceil(agent.invulnerable)}s`;
-  }
-  if (agent.overcharge > 0) {
-    return `overcharge ${Math.ceil(agent.overcharge)}s`;
-  }
-  if (agent.lives > 1) {
-    return `${agent.lives} lives`;
-  }
-  return agent.ai ? getIntentLabel(agent) : "YOU";
 }
 
 function getInvulnerabilityAlpha(agent, down) {
@@ -5227,9 +5160,6 @@ function updateHud() {
   batteryMeter.max = maxBatteryCapacity;
   batteryMeter.value = playerRole === "Investigator" ? state.player.battery : maxBatteryCapacity;
   signalMeter.value = getSignalStrength() * 100;
-  resolveMeter.value = playerRole === "Investigator"
-    ? state.player.resolve
-    : Math.max(0, 100 - getTeamResolve());
   const actor = playerRole === "Investigator" ? state.player : state.anomaly;
   const maxCooldown = abilityMax[playerRole];
   abilityMeter.value = 100 - (actor.abilityCooldown / maxCooldown) * 100;
@@ -5785,7 +5715,7 @@ function showResults(text, achievements = [], career = services.stats.getProfile
   resultTitle.textContent = text;
   const primaryStat = text.includes("contained")
     ? ["Anomaly Health", `${Math.round(state.anomaly.stability)}%`]
-    : ["Team Resolve", `${Math.round(getTeamResolve())}%`];
+    : ["Investigators Active", `${getInvestigators().filter((agent) => agent.resolve > 0).length}/${getInvestigators().length}`];
   resultStats.innerHTML = `
     <dt>Time</dt><dd>${formatTime(elapsed)}</dd>
     <dt>${primaryStat[0]}</dt><dd>${primaryStat[1]}</dd>
@@ -5831,7 +5761,7 @@ function getQuickStartCopy() {
   if (playerRole === "Anomaly") {
     return {
       role: "Anomaly",
-      goal: "Drain the team's resolve before they contain you.",
+      goal: "Collapse the team before they contain you.",
       steps: [
         "Match investigator speed, but stay out of steady light.",
         "Touch investigators to instantly collapse them.",
