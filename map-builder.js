@@ -124,6 +124,11 @@ const snapToggle = document.querySelector("#snapToggle");
 const snapMode = document.querySelector("#snapMode");
 const savedMapSelect = document.querySelector("#savedMapSelect");
 const layerList = document.querySelector("#layerList");
+const deleteMapModal = document.querySelector("#deleteMapModal");
+const deleteMapMessage = document.querySelector("#deleteMapMessage");
+const confirmDeleteMapBtn = document.querySelector("#confirmDeleteMapBtn");
+const cancelDeleteMapBtn = document.querySelector("#cancelDeleteMapBtn");
+let pendingDeleteMapName = "";
 
 const inspector = {
   type: document.querySelector("#objectType"),
@@ -213,7 +218,12 @@ function wireControls() {
   document.querySelector("#deleteMusicBtn").addEventListener("click", deleteSelectedMusic);
   document.querySelector("#saveNamedBtn").addEventListener("click", saveNamedMap);
   document.querySelector("#loadNamedBtn").addEventListener("click", loadNamedMap);
-  document.querySelector("#deleteNamedBtn").addEventListener("click", deleteNamedMap);
+  document.querySelector("#deleteNamedBtn").addEventListener("click", requestDeleteNamedMap);
+  confirmDeleteMapBtn.addEventListener("click", confirmDeleteNamedMap);
+  cancelDeleteMapBtn.addEventListener("click", closeDeleteMapModal);
+  deleteMapModal.addEventListener("click", (event) => {
+    if (event.target === deleteMapModal) closeDeleteMapModal();
+  });
   backgroundFile.addEventListener("change", importBackgroundImage);
   foregroundFile.addEventListener("change", importForegroundImage);
   decorationFile.addEventListener("change", importDecorationImage);
@@ -297,6 +307,10 @@ function wireControls() {
       deleteSelection();
     }
     if (event.key === "Escape") {
+      if (!deleteMapModal.hidden) {
+        closeDeleteMapModal();
+        return;
+      }
       clearSelection();
       pointer = null;
       syncInspector();
@@ -2592,18 +2606,42 @@ function loadNamedMap() {
   markStatus(`Loaded ${slot}`);
 }
 
-function deleteNamedMap() {
+function requestDeleteNamedMap() {
   const name = savedMapSelect.value;
   if (!name) {
     markStatus("Choose a saved map to delete");
     return;
   }
+  pendingDeleteMapName = name;
+  deleteMapMessage.textContent = `Are you sure you want to delete ${name}?`;
+  deleteMapModal.hidden = false;
+  confirmDeleteMapBtn.focus();
+}
+
+function closeDeleteMapModal() {
+  pendingDeleteMapName = "";
+  deleteMapModal.hidden = true;
+}
+
+function confirmDeleteNamedMap() {
+  const name = pendingDeleteMapName;
+  if (!name) {
+    closeDeleteMapModal();
+    return;
+  }
   const saved = getSavedMaps();
+  if (!saved[name]) {
+    closeDeleteMapModal();
+    renderSavedMaps();
+    markStatus("Saved map was already removed");
+    return;
+  }
   delete saved[name];
   if (activeSaveSlot === name) {
     activeSaveSlot = "";
   }
   setSavedMaps(saved);
+  closeDeleteMapModal();
   markStatus(`Deleted ${name}`);
 }
 
