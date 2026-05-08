@@ -171,7 +171,7 @@ const recentNetworkEvents = [];
 const GameBalance = {
   roundDurationSeconds: 300,
   ghost: {
-    moveSpeed: 168,
+    moveSpeed: 117,
     attackBonusRange: 2,
     attackConfirmSeconds: 0.08,
     attackCooldownSeconds: 0.9,
@@ -5783,7 +5783,7 @@ function getQuickStartCopy() {
       role: "Anomaly",
       goal: "Drain the team's resolve before they contain you.",
       steps: [
-        "Move faster than investigators, but stay out of steady light.",
+        "Match investigator speed, but stay out of steady light.",
         "Touch investigators to instantly collapse them.",
         "Use Blackout Wave to cut visibility when the team groups up."
       ]
