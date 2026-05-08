@@ -750,6 +750,7 @@ function makeAnomaly() {
     stability: 100,
     revealed: 0,
     damageFlash: 0,
+    damagePercentTimer: 0,
     carryTimer: 0,
     carriedAgent: null,
     shockTimer: 0,
@@ -981,6 +982,7 @@ function update(dt) {
   cameraShake = Math.max(0, cameraShake - dt);
   abilityFlash = Math.max(0, abilityFlash - dt);
   signalPulse = Math.max(0, signalPulse - dt);
+  state.anomaly.damagePercentTimer = Math.max(0, (state.anomaly.damagePercentTimer ?? 0) - dt);
   state.player.abilityCooldown = Math.max(0, state.player.abilityCooldown - dt);
   state.anomaly.abilityCooldown = Math.max(0, state.anomaly.abilityCooldown - dt);
   updateOverchargeTimers(dt);
@@ -1698,7 +1700,7 @@ function resolveFlashlights(dt) {
         ? GameBalance.tracker.aiFlashlightDamagePerSecond * getBotTuning().investigatorDamage
         : GameBalance.tracker.flashlightDamagePerSecond;
       const damage = baseDamage * getLightDamageMultiplier(agent);
-      anomaly.stability = Math.max(0, anomaly.stability - dt * damage);
+      applyAnomalyDamage(dt * damage);
       state.stats.damageDealt += dt * damage;
       revealAnomaly(GameBalance.ghost.visibilityAfterHitSeconds);
       if (canShockAnomaly(anomaly)) {
@@ -1721,6 +1723,14 @@ function resolveFlashlights(dt) {
   }
   anomaly.revealed = Math.max(0, anomaly.revealed - dt * (hit ? 0.4 : 1.4));
   anomaly.damageFlash = Math.max(0, (anomaly.damageFlash ?? 0) - dt * (hit ? 0.75 : 2.4));
+}
+
+function applyAnomalyDamage(amount) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return;
+  }
+  state.anomaly.stability = Math.max(0, state.anomaly.stability - amount);
+  state.anomaly.damagePercentTimer = 0.5;
 }
 
 function resolveEchoLight(agent, dt) {
@@ -2253,7 +2263,7 @@ function resolveRelays(dt) {
     }
 
     if (relay.active && distance(relay, state.anomaly) < 305) {
-      state.anomaly.stability = Math.max(0, state.anomaly.stability - dt * 4.2);
+      applyAnomalyDamage(dt * 4.2);
       state.anomaly.revealed = Math.max(state.anomaly.revealed, 0.36);
       if (visualChance(dt * 4)) {
         burst(state.anomaly.x, state.anomaly.y, "#dff7ff", 1);
@@ -2419,7 +2429,7 @@ function useRoleAbility() {
     const tagged = distance(state.player, state.anomaly) < 360 && !segmentBlocked(state.player.x, state.player.y, state.anomaly.x, state.anomaly.y);
     if (tagged) {
       state.anomaly.revealed = Math.max(state.anomaly.revealed, 2.3);
-      state.anomaly.stability = Math.max(0, state.anomaly.stability - 10);
+      applyAnomalyDamage(10);
       addCameraShake(0.14);
       createRing(state.anomaly.x, state.anomaly.y, "#7ae4d6", 130, 0.9);
       burst(state.anomaly.x, state.anomaly.y, "#dff7ff", 30);
@@ -2899,6 +2909,7 @@ function draw() {
   drawEchoes();
   drawAgents();
   drawOcclusionOverlays();
+  drawAnomalyDamageReadout();
   drawObjectiveHints();
   drawParticles();
   drawBlackoutDarkness();
@@ -5064,6 +5075,35 @@ function drawAnomaly(anomaly) {
   if (playerRole === "Anomaly" || alpha > 0.24) {
     drawNameplate(anomaly.x, anomaly.y - 36, playerRole === "Anomaly" ? "YOU" : "ANOMALY", getAnomalyStateLabel(), "#e76f8a");
   }
+}
+
+function drawAnomalyDamageReadout() {
+  const anomaly = state.anomaly;
+  if (state.phase !== "playing" || (anomaly.damagePercentTimer ?? 0) <= 0) {
+    return;
+  }
+  const percent = `${Math.max(0, Math.ceil(anomaly.stability))}%`;
+  const width = Math.max(50, measureTextWidth(percent, 15) + 24);
+  const alpha = clamp((anomaly.damagePercentTimer ?? 0) / 0.16, 0, 1);
+  const y = anomaly.y - 90;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(anomaly.x, y);
+  ctx.shadowColor = "#e76f8a";
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = "rgba(5, 8, 12, 0.82)";
+  ctx.strokeStyle = "rgba(231, 111, 138, 0.72)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(-width / 2, -16, width, 28, 7);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#ffd6df";
+  ctx.font = "900 15px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(percent, 0, -1);
+  ctx.restore();
 }
 
 function getAnomalyEscapeVisibility(anomaly) {
