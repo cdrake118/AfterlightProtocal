@@ -16,6 +16,7 @@ const wallAnchorHitRadius = 18;
 const storageFloorImageMax = { width: 1280, height: 720, quality: 0.86 };
 const storageDecorationImageMax = { width: 640, height: 640, quality: 0.86 };
 const savedMapsKey = "afterlight-map-builder-saves";
+const lastLoadedMapKey = "afterlight-map-builder-last-loaded";
 const assetTrayKey = "afterlight-map-builder-assets";
 const playtestMapKey = "afterlight-playtest-map";
 const historyLimit = 50;
@@ -148,13 +149,14 @@ const inspector = {
 };
 
 wireControls();
+const restoredLastMap = restoreLastLoadedMap();
 syncForm();
 updateExport();
 validateMap();
 renderAssetTray();
 renderSavedMaps();
 loadMusicLibrary();
-commitHistory("Initial");
+commitHistory(restoredLastMap ? `Load ${activeSaveSlot}` : "Initial");
 draw();
 
 function wireControls() {
@@ -180,6 +182,7 @@ function wireControls() {
   document.querySelector("#sampleBtn").addEventListener("click", () => {
     map = normalizeGameMap(sampleMap);
     activeSaveSlot = "";
+    rememberLastLoadedMap("");
     clearSelection();
     syncForm();
     commitHistory("Sample");
@@ -1424,8 +1427,8 @@ function draw() {
   if (gridToggle.checked) drawGrid();
   map.decorations.forEach((decoration, index) => drawImageRect(decoration, isSelected("decoration", index)));
   map.props.forEach((prop, index) => drawRect(prop, prop.color, "#7ae4d6", isSelected("prop", index)));
-  map.walls.forEach((wall, index) => drawWall(wall, isSelected("wall", index)));
   drawImageRect(map.foregroundImage, isSelected("foreground", 0));
+  map.walls.forEach((wall, index) => drawWall(wall, isSelected("wall", index)));
   map.occluders.forEach((occluder, index) => drawOccluder(occluder, isSelected("occluder", index)));
   if (activeTool === "wall" || activeTool === "barrier" || pointer?.mode === "drawSegment") drawWallAnchors();
   map.labels.forEach((label, index) => drawLabel(label, isSelected("label", index)));
@@ -1815,6 +1818,7 @@ async function importJsonFile() {
     const incoming = JSON.parse(await file.text());
     map = incoming.type === "map" ? fromTiledMap(incoming) : normalizeGameMap(incoming);
     activeSaveSlot = "";
+    rememberLastLoadedMap("");
     clearSelection();
     syncForm();
     renderSavedMaps("");
@@ -2204,6 +2208,7 @@ function makeNewMap() {
 function loadTemplate(name) {
   map = normalizeGameMap(makeTemplateMap(name));
   activeSaveSlot = "";
+  rememberLastLoadedMap("");
   clearSelection();
   syncForm();
   commitHistory(`Template ${name}`);
@@ -2214,6 +2219,7 @@ function loadTemplate(name) {
 function startNewMap() {
   map = normalizeGameMap({ ...makeTemplateMap("blank"), name: "Untitled Map" });
   activeSaveSlot = "";
+  rememberLastLoadedMap("");
   clearSelection();
   syncForm();
   commitHistory("New Map");
@@ -2536,6 +2542,28 @@ function getSavedMaps() {
   }
 }
 
+function rememberLastLoadedMap(slot) {
+  if (slot) {
+    localStorage.setItem(lastLoadedMapKey, slot);
+    return;
+  }
+  localStorage.removeItem(lastLoadedMapKey);
+}
+
+function restoreLastLoadedMap() {
+  const slot = localStorage.getItem(lastLoadedMapKey) ?? "";
+  if (!slot) return false;
+  const saved = getSavedMaps();
+  const next = saved[slot];
+  if (!next) {
+    rememberLastLoadedMap("");
+    return false;
+  }
+  activeSaveSlot = slot;
+  map = normalizeGameMap(next);
+  return true;
+}
+
 function setSavedMaps(saved, preferredSlot = activeSaveSlot) {
   localStorage.setItem(savedMapsKey, JSON.stringify(saved));
   renderSavedMaps(preferredSlot);
@@ -2577,6 +2605,7 @@ async function saveNamedMap() {
     }
     saved[slot] = await compactMapForStorage(toGameMap());
     activeSaveSlot = slot;
+    rememberLastLoadedMap(slot);
     setSavedMaps(saved, slot);
     savedMapSelect.value = slot;
     markStatus(previousSlot && previousSlot !== slot ? `Renamed to ${slot}` : `Saved ${slot}`);
@@ -2598,6 +2627,7 @@ function loadNamedMap() {
     return;
   }
   activeSaveSlot = slot;
+  rememberLastLoadedMap(slot);
   map = normalizeGameMap(next);
   clearSelection();
   syncForm();
@@ -2639,6 +2669,9 @@ function confirmDeleteNamedMap() {
   delete saved[name];
   if (activeSaveSlot === name) {
     activeSaveSlot = "";
+  }
+  if (localStorage.getItem(lastLoadedMapKey) === name) {
+    rememberLastLoadedMap("");
   }
   setSavedMaps(saved);
   closeDeleteMapModal();
