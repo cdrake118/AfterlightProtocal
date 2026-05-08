@@ -339,9 +339,19 @@ io.on("connection", (socket) => {
 });
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Afterlight party server listening on http://127.0.0.1:${port}`);
+  console.log(`Afterlight party server listening on 0.0.0.0:${port}`);
   appendStorageLog("server:start", { port }).catch(() => {});
 });
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    console.log(`Afterlight party server received ${signal}; shutting down`);
+    server.close(() => {
+      appendStorageLog("server:stop", { signal }).finally(() => process.exit(0));
+    });
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}
 
 async function sendStatic(pathname, res) {
   const safePath = normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, "");
