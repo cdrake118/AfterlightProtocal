@@ -15,6 +15,7 @@ const storageDirs = makeStorageDirs(storageRoot);
 const mapMusicDir = resolve(process.env.MAP_MUSIC_DIR ?? storageDirs.music);
 const soundEffectsDir = resolve(process.env.MAP_SOUND_EFFECTS_DIR ?? storageDirs.sfx);
 const soundEffectsConfigFile = resolve(process.env.SOUND_EFFECTS_CONFIG_FILE ?? join(soundEffectsDir, "sound-effects.json"));
+const globalSettingsFile = resolve(process.env.GLOBAL_SETTINGS_FILE ?? join(storageDirs.settings, "global-settings.json"));
 const maxMapMusicUploadBytes = 12 * 1024 * 1024;
 const maxMapMusicRequestBytes = Math.ceil(maxMapMusicUploadBytes * 1.4) + 2048;
 const maxSoundEffectUploadBytes = 12 * 1024 * 1024;
@@ -23,6 +24,21 @@ const maxMapImageUploadBytes = 10 * 1024 * 1024;
 const maxMapImageRequestBytes = Math.ceil(maxMapImageUploadBytes * 1.4) + 2048;
 const maxMapDataBytes = 2 * 1024 * 1024;
 const rooms = new Map();
+
+const defaultGlobalSettings = {
+  batteries: {
+    respawnTimerSeconds: 30,
+    lowBatteryThreshold: 0.35,
+    startingPickups: 1,
+    maxActivePickups: 3,
+    flashlightBatteryMax: 165.6,
+    flashlightDrainPerSecond: 19.2,
+    aiFlashlightDrainPerSecond: 15.6,
+    overchargeDurationSeconds: 18,
+    overchargeDamageMultiplier: 2.15,
+    overchargeReviveMultiplier: 1.75
+  }
+};
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -92,6 +108,14 @@ const server = createServer(async (req, res) => {
     }
     if (requestUrl.pathname === "/api/storage" && req.method === "GET") {
       sendJson(res, await storageStatus());
+      return;
+    }
+    if (requestUrl.pathname === "/api/global-settings" && req.method === "GET") {
+      sendJson(res, await readGlobalSettings());
+      return;
+    }
+    if (requestUrl.pathname === "/api/global-settings" && req.method === "PUT") {
+      sendJson(res, await saveGlobalSettings(req));
       return;
     }
     if (requestUrl.pathname === "/api/maps" && req.method === "GET") {
@@ -421,6 +445,7 @@ function makeStorageDirs(base) {
     imageMisc: join(base, "media", "images", "misc"),
     music: join(base, "media", "music"),
     sfx: join(base, "media", "sfx"),
+    settings: join(base, "settings"),
     uploads: join(base, "uploads"),
     logs: join(base, "logs"),
     tmp: join(base, "tmp")
@@ -468,6 +493,7 @@ async function storageStatus() {
         sfx: relativeStoragePath(soundEffectsDir)
       },
       uploads: relativeStoragePath(storageDirs.uploads),
+      settings: relativeStoragePath(storageDirs.settings),
       logs: relativeStoragePath(storageDirs.logs),
       tmp: relativeStoragePath(storageDirs.tmp)
     },
@@ -476,6 +502,7 @@ async function storageStatus() {
       images: await countFiles(storageDirs.images),
       music: await countFiles(mapMusicDir),
       sfx: await countFiles(soundEffectsDir),
+      settings: await countFiles(storageDirs.settings),
       logs: await countFiles(storageDirs.logs)
     }
   };
@@ -643,6 +670,52 @@ async function removeSoundEffectAssignments(src) {
     await mkdir(soundEffectsDir, { recursive: true });
     await writeFile(soundEffectsConfigFile, `${JSON.stringify({ version: 1, soundEffects }, null, 2)}\n`);
   }
+}
+
+async function readGlobalSettings() {
+  await mkdir(storageDirs.settings, { recursive: true });
+  try {
+    const parsed = JSON.parse(await readFile(globalSettingsFile, "utf8"));
+    return { ok: true, version: 1, settings: normalizeGlobalSettings(parsed.settings ?? parsed) };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { ok: true, version: 1, settings: normalizeGlobalSettings(defaultGlobalSettings) };
+    }
+    throw error;
+  }
+}
+
+async function saveGlobalSettings(req) {
+  const payload = await readJsonBody(req, maxMapDataBytes);
+  const settings = normalizeGlobalSettings(payload.settings ?? payload);
+  await mkdir(storageDirs.settings, { recursive: true });
+  await writeFile(globalSettingsFile, `${JSON.stringify({ version: 1, settings }, null, 2)}\n`);
+  await appendStorageLog("settings:global", { groups: Object.keys(settings).length });
+  return { ok: true, version: 1, settings };
+}
+
+function normalizeGlobalSettings(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const batteries = source.batteries && typeof source.batteries === "object" && !Array.isArray(source.batteries)
+    ? source.batteries
+    : {};
+  const defaults = defaultGlobalSettings.batteries;
+  const settings = {
+    batteries: {
+      respawnTimerSeconds: clampNumber(batteries.respawnTimerSeconds, 5, 180, defaults.respawnTimerSeconds),
+      lowBatteryThreshold: clampNumber(batteries.lowBatteryThreshold, 0.05, 0.95, defaults.lowBatteryThreshold),
+      startingPickups: Math.round(clampNumber(batteries.startingPickups, 0, 8, defaults.startingPickups)),
+      maxActivePickups: Math.round(clampNumber(batteries.maxActivePickups, 1, 12, defaults.maxActivePickups)),
+      flashlightBatteryMax: clampNumber(batteries.flashlightBatteryMax, 30, 300, defaults.flashlightBatteryMax),
+      flashlightDrainPerSecond: clampNumber(batteries.flashlightDrainPerSecond, 1, 60, defaults.flashlightDrainPerSecond),
+      aiFlashlightDrainPerSecond: clampNumber(batteries.aiFlashlightDrainPerSecond, 1, 60, defaults.aiFlashlightDrainPerSecond),
+      overchargeDurationSeconds: clampNumber(batteries.overchargeDurationSeconds, 0, 60, defaults.overchargeDurationSeconds),
+      overchargeDamageMultiplier: clampNumber(batteries.overchargeDamageMultiplier, 1, 5, defaults.overchargeDamageMultiplier),
+      overchargeReviveMultiplier: clampNumber(batteries.overchargeReviveMultiplier, 1, 5, defaults.overchargeReviveMultiplier)
+    }
+  };
+  settings.batteries.maxActivePickups = Math.max(settings.batteries.startingPickups, settings.batteries.maxActivePickups);
+  return settings;
 }
 
 function normalizeSoundEffectsConfig(value) {

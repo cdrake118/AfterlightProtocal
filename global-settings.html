@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Afterlight Protocol | Global Settings</title>
+    <link rel="stylesheet" href="map-builder.css?v=20260509-01">
+    <script src="global-settings.js?v=20260509-01" defer></script>
+  </head>
+  <body>
+    <main class="builder-shell global-settings-page">
+      <header class="builder-header">
+        <div>
+          <p class="label">Afterlight Protocol</p>
+          <h1>Global Settings</h1>
+        </div>
+        <nav class="builder-nav" aria-label="Global settings navigation">
+          <a href="map-builder.html">Builder</a>
+          <a href="sound-effects.html">Sound Effects</a>
+          <a href="/host">Host</a>
+          <a href="guide.html">Guide</a>
+        </nav>
+      </header>
+
+      <section class="global-settings-workspace" aria-label="Global gameplay settings">
+        <aside class="builder-panel settings-summary-panel" aria-label="Settings summary">
+          <div class="panel-section">
+            <div class="sound-page-head">
+              <p class="section-title">Status</p>
+              <div id="saveStatus" class="muted">Loading settings</div>
+            </div>
+            <div class="settings-summary-list">
+              <div>
+                <span>Battery economy</span>
+                <strong id="batterySummary">--</strong>
+              </div>
+              <div>
+                <span>Pickup pressure</span>
+                <strong id="pickupSummary">--</strong>
+              </div>
+              <div>
+                <span>Overcharge</span>
+                <strong id="overchargeSummary">--</strong>
+              </div>
+            </div>
+            <div class="action-grid compact-actions">
+              <button id="resetBtn" type="button">Reset Defaults</button>
+              <button id="refreshBtn" type="button">Refresh</button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="builder-panel settings-editor-panel" aria-label="Battery settings">
+          <div class="panel-section">
+            <p class="section-title">Battery</p>
+            <div id="settingsFields" class="global-settings-grid"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

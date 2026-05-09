@@ -17,6 +17,7 @@ afterlight/
       misc/
     music/
     sfx/
+  settings/
   uploads/
   logs/
   tmp/
@@ -28,6 +29,7 @@ afterlight/
 - Uploaded map sound effects are stored in `media/sfx/` and served from `/storage/audio/sfx/<filename>`.
 - Uploaded map images are stored in `media/images/<kind>/` and served from `/storage/images/<kind>/<filename>`.
 - Published map JSON is stored in `maps/published/` and exposed through `/api/maps`.
+- Global gameplay settings are stored in `settings/global-settings.json`.
 - Server storage events are appended to `logs/server-events.jsonl`.
 
 ## Useful Endpoints
@@ -36,5 +38,6 @@ afterlight/
 - `GET /api/map-music`, `POST /api/map-music`, `DELETE /api/map-music/:filename` manage server music.
 - `GET /api/sound-effects`, `POST /api/sound-effects`, `DELETE /api/sound-effects/:filename` manage server sound effects.
 - `GET /api/sound-effects/config`, `PUT /api/sound-effects/config` manage global sound effect assignments.
+- `GET /api/global-settings`, `PUT /api/global-settings` manage global gameplay tuning.
 - `GET /api/map-images?kind=props`, `POST /api/map-images`, `DELETE /api/map-images/:kind/:filename` manage server images.
 - `GET /api/maps`, `POST /api/maps`, `GET /api/maps/:filename`, `DELETE /api/maps/:filename` manage published map JSON.

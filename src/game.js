@@ -130,6 +130,7 @@ let audioManifest = null;
 let audioManifestPromise = null;
 let globalSoundEffects = null;
 let globalSoundEffectsPromise = null;
+let globalSettingsPromise = null;
 let audioUnlockPending = false;
 const audioBuffers = new Map();
 const audioBufferPromises = new Map();
@@ -227,21 +228,21 @@ const GameBalance = {
   }
 };
 
-const reviveRange = GameBalance.tracker.reviveRange;
-const reviveSeconds = GameBalance.tracker.reviveDurationSeconds;
+let reviveRange = GameBalance.tracker.reviveRange;
+let reviveSeconds = GameBalance.tracker.reviveDurationSeconds;
 const relayRange = 76;
 const relaysEnabled = false;
-const batterySpawnInterval = GameBalance.batteries.spawnIntervalSeconds;
-const lowBatterySpawnThreshold = GameBalance.batteries.lowBatteryThreshold;
-const startingBatteryPickups = GameBalance.batteries.startingPickups;
-const maxActiveBatteryPickups = GameBalance.batteries.maxActivePickups;
-const maxBatteryCapacity = GameBalance.tracker.flashlightBatteryMax;
-const blackoutDrainRadius = GameBalance.ghost.magicRadius;
+let batterySpawnInterval = GameBalance.batteries.spawnIntervalSeconds;
+let lowBatterySpawnThreshold = GameBalance.batteries.lowBatteryThreshold;
+let startingBatteryPickups = GameBalance.batteries.startingPickups;
+let maxActiveBatteryPickups = GameBalance.batteries.maxActivePickups;
+let maxBatteryCapacity = GameBalance.tracker.flashlightBatteryMax;
+let blackoutDrainRadius = GameBalance.ghost.magicRadius;
 const proximityWarningRange = GameBalance.warning.weakDistance;
 const proximityDangerRange = GameBalance.warning.strongDistance;
-const overchargeDuration = GameBalance.batteries.overchargeDurationSeconds;
-const overchargeDamageMultiplier = GameBalance.batteries.overchargeDamageMultiplier;
-const overchargeReviveMultiplier = GameBalance.batteries.overchargeReviveMultiplier;
+let overchargeDuration = GameBalance.batteries.overchargeDurationSeconds;
+let overchargeDamageMultiplier = GameBalance.batteries.overchargeDamageMultiplier;
+let overchargeReviveMultiplier = GameBalance.batteries.overchargeReviveMultiplier;
 const navCellSize = 44;
 const investigatorMoveSpeed = GameBalance.tracker.moveSpeed;
 const anomalyMoveSpeed = GameBalance.ghost.moveSpeed;
@@ -723,7 +724,14 @@ function makeAgent(x, y, color, name) {
     anomalyMemory: 0,
     lastKnownAnomaly: null,
     probeTimer: 0,
-    probeCooldown: randomRange(aiProbeMinCooldown, aiProbeMaxCooldown)
+    probeCooldown: randomRange(aiProbeMinCooldown, aiProbeMaxCooldown),
+    scanTimer: 0,
+    scanCooldown: randomRange(2.2, 5.4),
+    scanAngle: randomAngle(),
+    scanDirection: visualChance(0.5) ? 1 : -1,
+    stuckTimer: 0,
+    unstuckTimer: 0,
+    unstuckAngle: randomAngle()
   };
 }
 
@@ -1428,6 +1436,7 @@ function steerAiInvestigator(agent, dt) {
   let dx = Math.cos(agent.wander);
   let dy = Math.sin(agent.wander);
   let speedFactor = 0.42;
+  let moveTarget = null;
 
   if (agent.intent === "evade") {
     const threat = target ?? getAiAnomalyIntel(agent) ?? state.anomaly;
@@ -1435,32 +1444,87 @@ function steerAiInvestigator(agent, dt) {
     dy = agent.y - threat.y;
     speedFactor = 0.72;
   } else if (target && (agent.intent === "revive" || agent.intent === "battery" || agent.intent === "relay")) {
-    dx = target.x - agent.x;
-    dy = target.y - agent.y;
+    moveTarget = getAiInvestigatorMoveTarget(agent, target);
+    dx = moveTarget.x - agent.x;
+    dy = moveTarget.y - agent.y;
     speedFactor = agent.intent === "revive" ? 0.68 : 0.58;
   } else if (target && agent.intent === "hunt") {
-    const orbit = Math.atan2(target.y - agent.y, target.x - agent.x) + Math.PI * 0.5;
-    const approach = Math.atan2(target.y - agent.y, target.x - agent.x);
+    moveTarget = getAiInvestigatorMoveTarget(agent, target);
+    const orbit = Math.atan2(moveTarget.y - agent.y, moveTarget.x - agent.x) + Math.PI * 0.5;
+    const approach = Math.atan2(moveTarget.y - agent.y, moveTarget.x - agent.x);
     dx = Math.cos(orbit) * 0.55 + Math.cos(approach) * 0.45;
     dy = Math.sin(orbit) * 0.55 + Math.sin(approach) * 0.45;
     speedFactor = 0.48;
   } else if (target && agent.intent === "patrol") {
-    dx = target.x - agent.x;
-    dy = target.y - agent.y;
+    moveTarget = getAiInvestigatorMoveTarget(agent, target);
+    dx = moveTarget.x - agent.x;
+    dy = moveTarget.y - agent.y;
     speedFactor = 0.46;
     if (distance(agent, target) < 54) {
       agent.searchTarget = null;
     }
   }
 
+  if (agent.unstuckTimer > 0) {
+    agent.unstuckTimer = Math.max(0, agent.unstuckTimer - dt);
+    dx = Math.cos(agent.unstuckAngle);
+    dy = Math.sin(agent.unstuckAngle);
+    speedFactor = 0.64;
+  }
+
   const len = Math.hypot(dx, dy) || 1;
-  moveCircle(agent, (dx / len) * agent.speed * speedFactor * tuning.investigatorSpeed * dt, (dy / len) * agent.speed * speedFactor * tuning.investigatorSpeed * dt);
+  const beforeX = agent.x;
+  const beforeY = agent.y;
+  const step = agent.speed * speedFactor * tuning.investigatorSpeed * dt;
+  moveCircle(agent, (dx / len) * step, (dy / len) * step);
+  updateAiStuckState(agent, Math.hypot(agent.x - beforeX, agent.y - beforeY), step, dx / len, dy / len, dt);
   updateDash(agent, dt);
+}
+
+function getAiInvestigatorMoveTarget(agent, target) {
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+    return target;
+  }
+  if (!segmentBlocked(agent.x, agent.y, target.x, target.y)) {
+    return target;
+  }
+
+  const path = findNavPath(agent, target, agent.radius + 6);
+  if (path.length > 1) {
+    return path[1];
+  }
+  if (path.length === 1) {
+    return path[0];
+  }
+  return target;
+}
+
+function updateAiStuckState(agent, actualStep, intendedStep, dirX, dirY, dt) {
+  if (intendedStep <= 0.01 || actualStep > Math.min(2.8, intendedStep * 0.42)) {
+    agent.stuckTimer = Math.max(0, (agent.stuckTimer ?? 0) - dt * 1.5);
+    return;
+  }
+
+  agent.stuckTimer = (agent.stuckTimer ?? 0) + dt;
+  if (agent.stuckTimer < 0.55) {
+    return;
+  }
+
+  const turn = visualChance(0.5) ? Math.PI * 0.62 : -Math.PI * 0.62;
+  agent.unstuckAngle = Math.atan2(dirY, dirX) + Math.PI + turn + randomRange(-0.35, 0.35);
+  agent.unstuckTimer = randomRange(0.45, 0.85);
+  agent.stuckTimer = 0;
+  agent.nextTurn = 0;
+  agent.searchTarget = pickAiSearchTarget(agent);
+  agent.patrolIndex = ((agent.patrolIndex ?? 0) + 1) % Math.max(1, roomLabels.length || 2);
 }
 
 function shouldAiUseLight(agent, target = state.anomaly) {
   if (agent.battery <= 0 || agent.resolve <= 0) {
     return false;
+  }
+  if (target?.kind === "scan") {
+    return agent.scanTimer > 0;
   }
   const origin = getInvestigatorFlashlightOrigin(agent);
   const dist = distance(origin, target);
@@ -1489,6 +1553,13 @@ function chooseInvestigatorFocus(agent) {
   if (anomalyIntel) {
     return anomalyIntel;
   }
+  if (agent.scanTimer > 0) {
+    return {
+      x: clampWorldX(agent.x + Math.cos(agent.scanAngle) * 180, agent.radius),
+      y: clampWorldY(agent.y + Math.sin(agent.scanAngle) * 180, agent.radius),
+      kind: "scan"
+    };
+  }
   return agent.intent === "patrol" ? getAiPatrolTarget(agent) : getAiSearchTarget(agent);
 }
 
@@ -1496,17 +1567,32 @@ function updateAiAnomalyAwareness(agent, dt) {
   agent.anomalyMemory = Math.max(0, agent.anomalyMemory - dt);
   agent.probeTimer = Math.max(0, agent.probeTimer - dt);
   agent.probeCooldown = Math.max(0, agent.probeCooldown - dt);
+  agent.scanTimer = Math.max(0, (agent.scanTimer ?? 0) - dt);
+  agent.scanCooldown = Math.max(0, (agent.scanCooldown ?? 0) - dt);
+  if (agent.scanTimer > 0) {
+    agent.scanAngle += (agent.scanDirection || 1) * dt * 1.15;
+  }
 
   if (canAiSeeAnomaly(agent)) {
     rememberAnomaly(agent, state.anomaly.revealed > 0.42 ? 10 : 28);
+    agent.scanTimer = 0;
     return;
   }
 
   const warning = getAnomalyProximityWarning(agent);
+  if (!warning && agent.probeTimer <= 0 && agent.scanTimer <= 0 && agent.scanCooldown <= 0 && visualChance(dt * 0.42)) {
+    agent.scanTimer = randomRange(1.1, 2.2);
+    agent.scanCooldown = randomRange(4.2, 8.5);
+    agent.scanDirection = visualChance(0.5) ? 1 : -1;
+    agent.scanAngle = agent.aim + randomRange(-0.8, 0.8);
+  }
+
   if (agent.probeTimer <= 0 && agent.probeCooldown <= 0 && (warning || visualChance(dt * 0.18))) {
     const sweepAngle = agent.aim + randomRange(-0.9, 0.9);
     agent.probeTimer = randomRange(warning ? 0.5 : 0.28, warning ? 0.9 : 0.52);
     agent.probeCooldown = randomRange(aiProbeMinCooldown + 0.45, aiProbeMaxCooldown + 0.9);
+    agent.scanTimer = warning ? Math.max(agent.scanTimer, 0.7) : agent.scanTimer;
+    agent.scanAngle = warning ? sweepAngle : agent.scanAngle;
     agent.searchTarget = warning ? {
       x: clampWorldX(agent.x + Math.cos(sweepAngle) * 170, agent.radius),
       y: clampWorldY(agent.y + Math.sin(sweepAngle) * 170, agent.radius),
@@ -7101,6 +7187,55 @@ function loadGlobalSoundEffects() {
   return globalSoundEffectsPromise;
 }
 
+function loadGlobalSettings() {
+  if (globalSettingsPromise) {
+    return globalSettingsPromise;
+  }
+  globalSettingsPromise = fetch("/api/global-settings")
+    .then((response) => response.ok ? response.json() : null)
+    .then((payload) => {
+      applyGlobalSettings(payload?.settings);
+      return payload?.settings ?? null;
+    })
+    .catch(() => null);
+  return globalSettingsPromise;
+}
+
+function applyGlobalSettings(settings) {
+  const batteries = settings?.batteries && typeof settings.batteries === "object" ? settings.batteries : {};
+  GameBalance.batteries.spawnIntervalSeconds = clampNumberSetting(batteries.respawnTimerSeconds, 5, 180, GameBalance.batteries.spawnIntervalSeconds);
+  GameBalance.batteries.lowBatteryThreshold = clampNumberSetting(batteries.lowBatteryThreshold, 0.05, 0.95, GameBalance.batteries.lowBatteryThreshold);
+  GameBalance.batteries.startingPickups = Math.round(clampNumberSetting(batteries.startingPickups, 0, 8, GameBalance.batteries.startingPickups));
+  GameBalance.batteries.maxActivePickups = Math.max(
+    GameBalance.batteries.startingPickups,
+    Math.round(clampNumberSetting(batteries.maxActivePickups, 1, 12, GameBalance.batteries.maxActivePickups))
+  );
+  GameBalance.tracker.flashlightBatteryMax = clampNumberSetting(batteries.flashlightBatteryMax, 30, 300, GameBalance.tracker.flashlightBatteryMax);
+  GameBalance.tracker.flashlightDrainPerSecond = clampNumberSetting(batteries.flashlightDrainPerSecond, 1, 60, GameBalance.tracker.flashlightDrainPerSecond);
+  GameBalance.tracker.aiFlashlightDrainPerSecond = clampNumberSetting(batteries.aiFlashlightDrainPerSecond, 1, 60, GameBalance.tracker.aiFlashlightDrainPerSecond);
+  GameBalance.batteries.overchargeDurationSeconds = clampNumberSetting(batteries.overchargeDurationSeconds, 0, 60, GameBalance.batteries.overchargeDurationSeconds);
+  GameBalance.batteries.overchargeDamageMultiplier = clampNumberSetting(batteries.overchargeDamageMultiplier, 1, 5, GameBalance.batteries.overchargeDamageMultiplier);
+  GameBalance.batteries.overchargeReviveMultiplier = clampNumberSetting(batteries.overchargeReviveMultiplier, 1, 5, GameBalance.batteries.overchargeReviveMultiplier);
+
+  reviveRange = GameBalance.tracker.reviveRange;
+  reviveSeconds = GameBalance.tracker.reviveDurationSeconds;
+  batterySpawnInterval = GameBalance.batteries.spawnIntervalSeconds;
+  lowBatterySpawnThreshold = GameBalance.batteries.lowBatteryThreshold;
+  startingBatteryPickups = GameBalance.batteries.startingPickups;
+  maxActiveBatteryPickups = GameBalance.batteries.maxActivePickups;
+  maxBatteryCapacity = GameBalance.tracker.flashlightBatteryMax;
+  blackoutDrainRadius = GameBalance.ghost.magicRadius;
+  overchargeDuration = GameBalance.batteries.overchargeDurationSeconds;
+  overchargeDamageMultiplier = GameBalance.batteries.overchargeDamageMultiplier;
+  overchargeReviveMultiplier = GameBalance.batteries.overchargeReviveMultiplier;
+}
+
+function clampNumberSetting(value, min, max, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric, min, max);
+}
+
 function playManifestSound(type) {
   const entry = audioManifest?.sfx?.[type];
   if (!entry?.src || missingAudioAssets.has(entry.src)) {
@@ -7681,6 +7816,7 @@ stageEl.addEventListener("click", handlePartyPanelClick);
 
 loadAnomalyAtlas();
 loadInvestigatorAtlases();
+await loadGlobalSettings();
 applySavedSettings();
 applyReplayParamsFromUrl();
 equipSuit(services.cosmetics.getLoadout());
