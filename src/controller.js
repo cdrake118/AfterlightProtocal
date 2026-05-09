@@ -20,6 +20,7 @@ const lightBtn = document.querySelector("#lightBtn");
 const dashBtn = document.querySelector("#dashBtn");
 const abilityBtn = document.querySelector("#abilityBtn");
 const padStatus = document.querySelector("#padStatus");
+const anomalyHealth = document.querySelector("#anomalyHealth");
 
 const socket = globalThis.io?.();
 const params = new URLSearchParams(location.search);
@@ -31,6 +32,10 @@ let member = null;
 let lobby = null;
 let ready = false;
 let sequence = 0;
+const inputIntervalMs = 33;
+const inputEpsilon = 0.02;
+let lastSentInput = null;
+let idleTicks = 0;
 let move = { x: 0, y: 0 };
 let aim = { x: 0, y: 0 };
 let light = false;
@@ -166,6 +171,10 @@ socket?.on("match:start", () => {
 });
 
 socket?.on("host:state", (state) => {
+  if (member?.role === "Anomaly" && anomalyHealth) {
+    const value = Number.isFinite(state?.anomalyHealth) ? Math.max(0, Math.round(state.anomalyHealth)) : null;
+    anomalyHealth.textContent = `Anomaly Stability: ${value ?? "--"}%`;
+  }
   if (member?.role === "Anomaly") {
     miniMap.hidden = false;
     drawMiniMap(state, member.role);
@@ -181,17 +190,27 @@ setInterval(() => {
   if (!member || !socket?.connected) return;
   sequence += 1;
   const aimVector = Math.hypot(aim.x, aim.y) > 0.08 ? aim : move;
-  socket.emit("player:input", {
+  const payload = {
     move,
     aim: member?.role === "Investigator" ? aimVector : move,
     light: member?.role === "Investigator" ? light : false,
     dash: member?.role === "Anomaly" ? dashPulse : false,
     ability: member?.role === "Anomaly" ? abilityPulse : false,
     sequence
-  });
+  };
+
+  const changed = !lastSentInput || hasMeaningfulInputChange(lastSentInput, payload) || payload.dash || payload.ability;
+  if (changed || idleTicks >= 2) {
+    socket.volatile.emit("player:input", payload);
+    lastSentInput = payload;
+    idleTicks = 0;
+  } else {
+    idleTicks += 1;
+  }
+
   dashPulse = false;
   abilityPulse = false;
-}, 50);
+}, inputIntervalMs);
 
 function setRole(role, emit = false) {
   selectedRole = role;
@@ -216,6 +235,8 @@ function renderLobby() {
   abilityBtn.hidden = member.role !== "Anomaly";
   abilityBtn.textContent = "Blackout";
   dashBtn.hidden = member.role !== "Anomaly";
+  anomalyHealth.hidden = member.role !== "Anomaly";
+  if (member.role !== "Anomaly") anomalyHealth.textContent = "Anomaly Stability: --%";
   if (member.role !== "Investigator") releaseAimJoystick();
   padStatus.textContent = `${member.role} assigned. ${lobby.members.filter((item) => item.connected).length} joined.`;
 }
@@ -626,4 +647,15 @@ function parseHexColor(color) {
     g: (value >> 8) & 255,
     b: value & 255
   };
+}
+
+
+function hasMeaningfulInputChange(prev, next) {
+  return (
+    Math.abs(prev.move.x - next.move.x) > inputEpsilon
+    || Math.abs(prev.move.y - next.move.y) > inputEpsilon
+    || Math.abs(prev.aim.x - next.aim.x) > inputEpsilon
+    || Math.abs(prev.aim.y - next.aim.y) > inputEpsilon
+    || prev.light !== next.light
+  );
 }

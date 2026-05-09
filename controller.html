@@ -59,7 +59,10 @@
             <button id="abilityBtn" class="action-button" type="button">Ability</button>
           </div>
         </div>
-        <p id="padStatus" class="controller-status">Waiting for host.</p>
+        <div class="controller-hud">
+          <p id="anomalyHealth" class="controller-status" hidden>Anomaly Stability: --%</p>
+          <p id="padStatus" class="controller-status">Waiting for host.</p>
+        </div>
       </section>
     </main>
     <script src="/socket.io/socket.io.js"></script>
