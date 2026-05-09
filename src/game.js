@@ -2182,7 +2182,7 @@ function advanceRevive(target, amount, helper) {
     recordReviveEvent(target, helper);
     stopLoopingSound(getReviveLoopKey(target));
     target.resolve = 44;
-    target.battery = Math.max(target.battery, maxBatteryCapacity * 0.35);
+    target.battery = maxBatteryCapacity;
     target.reviveProgress = 0;
     target.invulnerable = GameBalance.ghost.revivedInvulnerableSeconds;
     target.catchPressure = 0;
@@ -4943,7 +4943,7 @@ function drawOverchargeAura(agent) {
 }
 
 function drawProximityWarning(agent) {
-  if (playerRole !== "Investigator" || agent !== state.player) {
+  if (!shouldDrawProximityWarning(agent)) {
     return;
   }
   const level = getAnomalyProximityWarning(agent);
@@ -4970,6 +4970,16 @@ function drawProximityWarning(agent) {
   ctx.textBaseline = "middle";
   ctx.fillText(critical ? "!" : "?", agent.x, y + 1);
   ctx.restore();
+}
+
+function shouldDrawProximityWarning(agent) {
+  if (agent.resolve <= 0) {
+    return false;
+  }
+  if (playerRole === "Anomaly") {
+    return true;
+  }
+  return playerRole === "Investigator" && agent === state.player;
 }
 
 function drawAnomaly(anomaly) {
