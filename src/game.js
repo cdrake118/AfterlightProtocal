@@ -194,7 +194,7 @@ const GameBalance = {
   },
   tracker: {
     moveSpeed: 99.45,
-    flashlightBatteryMax: 144,
+    flashlightBatteryMax: 165.6,
     flashlightDrainPerSecond: 19.2,
     aiFlashlightDrainPerSecond: 15.6,
     flashlightBeamLength: 285,
