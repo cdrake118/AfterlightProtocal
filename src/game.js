@@ -4943,7 +4943,7 @@ function drawOverchargeAura(agent) {
 }
 
 function drawProximityWarning(agent) {
-  if (!shouldDrawProximityWarning(agent)) {
+  if (agent.resolve <= 0) {
     return;
   }
   const level = getAnomalyProximityWarning(agent);
@@ -4970,16 +4970,6 @@ function drawProximityWarning(agent) {
   ctx.textBaseline = "middle";
   ctx.fillText(critical ? "!" : "?", agent.x, y + 1);
   ctx.restore();
-}
-
-function shouldDrawProximityWarning(agent) {
-  if (agent.resolve <= 0) {
-    return false;
-  }
-  if (playerRole === "Anomaly") {
-    return true;
-  }
-  return playerRole === "Investigator" && agent === state.player;
 }
 
 function drawAnomaly(anomaly) {
