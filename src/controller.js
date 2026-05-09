@@ -39,6 +39,11 @@ let abilityPulse = false;
 let activePointerId = null;
 let activeAimPointerId = null;
 const miniMapImages = new Map();
+const miniMapAnomalyAtlas = {
+  src: "assets/characters/anomaly-ghost-atlas.png",
+  frame: 128,
+  cols: 4
+};
 
 roomCodeInput.value = (params.get("code") ?? "").toUpperCase();
 nameInput.value = storedName;
@@ -335,28 +340,204 @@ function drawMiniMap(state, role) {
       miniMapCtx.stroke();
       miniMapCtx.restore();
     }
-    miniMapCtx.strokeStyle = agent.lightOn ? "#f4b35d" : "rgba(248, 251, 253, 0.74)";
-    miniMapCtx.lineWidth = 2;
-    miniMapCtx.beginPath();
-    miniMapCtx.moveTo(x, y);
-    miniMapCtx.lineTo(x + Math.cos(facing) * 11, y + Math.sin(facing) * 11);
-    miniMapCtx.stroke();
   }
   for (const agent of state?.investigators ?? []) {
-    miniMapCtx.fillStyle = agent.resolve <= 0 ? "#f4b35d" : (agent.color ?? "#7ae4d6");
-    miniMapCtx.beginPath();
-    miniMapCtx.arc(sx(agent.x), sy(agent.y), 4, 0, Math.PI * 2);
-    miniMapCtx.fill();
-    miniMapCtx.strokeStyle = agent.lightOn ? "#f4b35d" : "rgba(5, 8, 12, 0.8)";
-    miniMapCtx.lineWidth = 1.5;
-    miniMapCtx.stroke();
+    drawMiniMapInvestigatorSprite(agent, sx(agent.x), sy(agent.y), viewport);
   }
   if (role === "Anomaly" && state?.anomaly) {
-    miniMapCtx.fillStyle = "#e76f8a";
+    drawMiniMapAnomalySprite(state.anomaly, sx(state.anomaly.x), sy(state.anomaly.y), viewport);
+  }
+}
+
+function drawMiniMapInvestigatorSprite(agent, x, y, viewport) {
+  const down = agent.resolve <= 0;
+  const scale = getMiniMapCharacterScale(viewport);
+  const color = down ? "#8b969e" : (agent.color ?? "#7ae4d6");
+  const aim = Number(agent.aim) || 0;
+  miniMapCtx.save();
+  miniMapCtx.translate(x, y);
+  miniMapCtx.globalAlpha = down ? 0.78 : 0.98;
+  miniMapCtx.shadowColor = down ? "rgba(0, 0, 0, 0.42)" : color;
+  miniMapCtx.shadowBlur = down ? 3 : 10;
+
+  if (down) {
+    miniMapCtx.rotate(aim + Math.PI / 2);
+    drawMiniMapDownedInvestigator(color, scale);
+    miniMapCtx.restore();
+    return;
+  }
+
+  drawMiniMapStandingInvestigator(agent, color, scale);
+  miniMapCtx.restore();
+}
+
+function drawMiniMapStandingInvestigator(agent, color, scale) {
+  const aim = Number(agent.aim) || 0;
+  const aimY = Math.sin(aim);
+  const facing = getMiniMapInvestigatorFacingDirection(aim);
+  const stride = Math.sin(performance.now() / 120 + agent.x * 0.03 + agent.y * 0.02) * 3 * scale;
+  const handX = (facing === "left" ? -15 : (facing === "right" ? 15 : 0)) * scale;
+  const handY = (facing === "down" ? -32 : (facing === "up" ? -55 : -43 + aimY * 5)) * scale;
+  const shoulderX = (facing === "left" ? -10 : (facing === "right" ? 10 : 0)) * scale;
+
+  miniMapCtx.save();
+  miniMapCtx.globalAlpha *= 0.34;
+  miniMapCtx.fillStyle = "rgba(0, 0, 0, 0.62)";
+  miniMapCtx.beginPath();
+  miniMapCtx.ellipse(0, 3 * scale, 24 * scale, 6 * scale, 0, 0, Math.PI * 2);
+  miniMapCtx.fill();
+  miniMapCtx.restore();
+
+  miniMapCtx.strokeStyle = darkenColor(color, 0.34);
+  miniMapCtx.lineWidth = Math.max(1.25, 4 * scale);
+  miniMapCtx.beginPath();
+  miniMapCtx.moveTo(-7 * scale, -8 * scale);
+  miniMapCtx.lineTo(-12 * scale, -2 * scale + stride);
+  miniMapCtx.moveTo(8 * scale, -8 * scale);
+  miniMapCtx.lineTo(13 * scale, -2 * scale - stride);
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = darkenColor(color, 0.18);
+  miniMapCtx.strokeStyle = "#071015";
+  miniMapCtx.lineWidth = Math.max(1.4, 3 * scale);
+  miniMapCtx.beginPath();
+  miniMapCtx.roundRect(-15 * scale, -56 * scale, 30 * scale, 46 * scale, 12 * scale);
+  miniMapCtx.fill();
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = color;
+  miniMapCtx.beginPath();
+  miniMapCtx.arc(0, -65 * scale, 14 * scale, 0, Math.PI * 2);
+  miniMapCtx.fill();
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = "rgba(5, 8, 12, 0.72)";
+  miniMapCtx.beginPath();
+  miniMapCtx.roundRect(-8 * scale, -68 * scale, 16 * scale, 9 * scale, 4 * scale);
+  miniMapCtx.fill();
+
+  miniMapCtx.strokeStyle = lightenColor(color, 0.36);
+  miniMapCtx.lineWidth = Math.max(1.25, 3 * scale);
+  miniMapCtx.beginPath();
+  miniMapCtx.moveTo(shoulderX, -43 * scale);
+  miniMapCtx.lineTo(handX, handY);
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = "#e9fbff";
+  miniMapCtx.strokeStyle = "#071015";
+  miniMapCtx.lineWidth = Math.max(1, 2 * scale);
+  miniMapCtx.beginPath();
+  if (facing === "left") {
+    miniMapCtx.roundRect(handX - 22 * scale, handY - 6 * scale, 22 * scale, 12 * scale, 5 * scale);
+  } else if (facing === "right") {
+    miniMapCtx.roundRect(handX, handY - 6 * scale, 22 * scale, 12 * scale, 5 * scale);
+  } else {
+    miniMapCtx.roundRect(handX - 11 * scale, handY - 6 * scale, 22 * scale, 12 * scale, 5 * scale);
+  }
+  miniMapCtx.fill();
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = lightenColor(color, 0.28);
+  miniMapCtx.beginPath();
+  miniMapCtx.roundRect(-12 * scale, -31 * scale, 24 * scale, 10 * scale, 5 * scale);
+  miniMapCtx.fill();
+}
+
+function drawMiniMapDownedInvestigator(color, scale) {
+  miniMapCtx.fillStyle = "rgba(0, 0, 0, 0.38)";
+  miniMapCtx.beginPath();
+  miniMapCtx.ellipse(0, 4 * scale, 34 * scale, 11 * scale, 0, 0, Math.PI * 2);
+  miniMapCtx.fill();
+
+  miniMapCtx.fillStyle = "#39444d";
+  miniMapCtx.strokeStyle = "#071015";
+  miniMapCtx.lineWidth = Math.max(1.4, 3 * scale);
+  miniMapCtx.beginPath();
+  miniMapCtx.roundRect(-34 * scale, -12 * scale, 58 * scale, 24 * scale, 12 * scale);
+  miniMapCtx.fill();
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = color;
+  miniMapCtx.beginPath();
+  miniMapCtx.arc(22 * scale, 0, 16 * scale, 0, Math.PI * 2);
+  miniMapCtx.fill();
+  miniMapCtx.stroke();
+
+  miniMapCtx.fillStyle = "#20282e";
+  miniMapCtx.beginPath();
+  miniMapCtx.roundRect(13 * scale, -5 * scale, 18 * scale, 10 * scale, 4 * scale);
+  miniMapCtx.fill();
+}
+
+function drawMiniMapAnomalySprite(anomaly, x, y, viewport) {
+  const image = getMiniMapImage(miniMapAnomalyAtlas.src);
+  const scale = getMiniMapCharacterScale(viewport);
+  const size = 76 * scale;
+  miniMapCtx.save();
+  miniMapCtx.translate(x, y);
+  miniMapCtx.shadowColor = "#7ae4d6";
+  miniMapCtx.shadowBlur = 12;
+  miniMapCtx.globalAlpha = 0.92;
+
+  if (image.complete && image.naturalWidth) {
+    const pose = getMiniMapAnomalyPose(anomaly);
+    if (pose.flip) {
+      miniMapCtx.scale(-1, 1);
+    }
+    const sx = pose.col * miniMapAnomalyAtlas.frame;
+    const sy = pose.row * miniMapAnomalyAtlas.frame;
+    miniMapCtx.drawImage(
+      image,
+      sx,
+      sy,
+      miniMapAnomalyAtlas.frame,
+      miniMapAnomalyAtlas.frame,
+      -size / 2,
+      -size / 2,
+      size,
+      size
+    );
+  } else {
+    miniMapCtx.fillStyle = "rgba(122, 228, 214, 0.72)";
     miniMapCtx.beginPath();
-    miniMapCtx.arc(sx(state.anomaly.x), sy(state.anomaly.y), 6, 0, Math.PI * 2);
+    miniMapCtx.arc(0, 0, size * 0.34, 0, Math.PI * 2);
     miniMapCtx.fill();
   }
+
+  miniMapCtx.shadowBlur = 0;
+  miniMapCtx.strokeStyle = "rgba(248, 251, 253, 0.78)";
+  miniMapCtx.lineWidth = Math.max(1, 2 * scale);
+  miniMapCtx.beginPath();
+  miniMapCtx.arc(0, 0, size * 0.32, -0.8, 0.8);
+  miniMapCtx.stroke();
+  miniMapCtx.restore();
+}
+
+function getMiniMapAnomalyPose(anomaly) {
+  const frame = Math.floor(performance.now() / 145) % miniMapAnomalyAtlas.cols;
+  const angle = Number(anomaly?.aim) || 0;
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  if (Math.abs(dx) > Math.abs(dy) * 1.15) {
+    return { row: frame % 2 === 0 ? 1 : 2, col: frame, flip: dx < 0 };
+  }
+  if (dy > 0) {
+    return { row: 4, col: frame, flip: false };
+  }
+  return { row: 0, col: frame, flip: false };
+}
+
+function getMiniMapCharacterScale(viewport) {
+  return clamp(viewport.w / 1280, 0.34, 0.72);
+}
+
+function getMiniMapInvestigatorFacingDirection(aim) {
+  const x = Math.cos(aim);
+  const y = Math.sin(aim);
+  if (Math.abs(y) > Math.abs(x)) {
+    return y < 0 ? "up" : "down";
+  }
+  return x < 0 ? "left" : "right";
 }
 
 function resizeMiniMap() {
@@ -414,4 +595,35 @@ function setJoinStatus(text) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function lightenColor(color, amount) {
+  return mixColor(color, "#ffffff", amount);
+}
+
+function darkenColor(color, amount) {
+  return mixColor(color, "#000000", amount);
+}
+
+function mixColor(color, target, amount) {
+  const source = parseHexColor(color);
+  const destination = parseHexColor(target);
+  if (!source || !destination) {
+    return color;
+  }
+  const channel = (a, b) => Math.round(a + (b - a) * amount).toString(16).padStart(2, "0");
+  return `#${channel(source.r, destination.r)}${channel(source.g, destination.g)}${channel(source.b, destination.b)}`;
+}
+
+function parseHexColor(color) {
+  const match = /^#?([a-f0-9]{6})$/i.exec(color);
+  if (!match) {
+    return null;
+  }
+  const value = Number.parseInt(match[1], 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
 }

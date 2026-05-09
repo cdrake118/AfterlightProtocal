@@ -5981,6 +5981,7 @@ function publishPartySnapshot() {
     anomaly: {
       x: Math.round(state.anomaly.x),
       y: Math.round(state.anomaly.y),
+      aim: Number(state.anomaly.aim.toFixed(3)),
       revealed: Number(state.anomaly.revealed.toFixed(2))
     },
     investigators: getInvestigators().map((agent) => ({
