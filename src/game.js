@@ -185,7 +185,7 @@ const GameBalance = {
     escapeDurationSeconds: 4,
     escapeSpeedMultiplier: 1.5,
     revivedInvulnerableSeconds: 3,
-    lightningRevealSeconds: 0.7,
+    lightningRevealSeconds: 0.5,
     magicCooldownSeconds: 30,
     initialMagicDelaySeconds: 30,
     magicDurationSeconds: 5,
@@ -219,7 +219,7 @@ const GameBalance = {
     overchargeReviveMultiplier: 1.75
   },
   lightning: {
-    revealDurationSeconds: 0.7
+    revealDurationSeconds: 0.5
   },
   ai: {
     probeMinCooldownSeconds: 1.6,
@@ -750,6 +750,7 @@ function makeAnomaly() {
     abilityCooldown: 0,
     stability: 100,
     revealed: 0,
+    lightningRevealTimer: 0,
     damageFlash: 0,
     damagePercentTimer: 0,
     carryTimer: 0,
@@ -984,6 +985,7 @@ function update(dt) {
   abilityFlash = Math.max(0, abilityFlash - dt);
   signalPulse = Math.max(0, signalPulse - dt);
   state.anomaly.damagePercentTimer = Math.max(0, (state.anomaly.damagePercentTimer ?? 0) - dt);
+  state.anomaly.lightningRevealTimer = Math.max(0, (state.anomaly.lightningRevealTimer ?? 0) - dt);
   state.player.abilityCooldown = Math.max(0, state.player.abilityCooldown - dt);
   state.anomaly.abilityCooldown = Math.max(0, state.anomaly.abilityCooldown - dt);
   updateOverchargeTimers(dt);
@@ -1056,7 +1058,8 @@ function triggerArenaEvent() {
       }
     }
   } else {
-    state.anomaly.revealed = Math.max(state.anomaly.revealed, GameBalance.lightning.revealDurationSeconds);
+    state.anomaly.lightningRevealTimer = Math.max(state.anomaly.lightningRevealTimer ?? 0, GameBalance.lightning.revealDurationSeconds);
+    state.anomaly.revealed = Math.max(state.anomaly.revealed, aiAnomalyVisibleThreshold + 0.02);
     state.stats.lightningReveals += 1;
     recordTelemetry("lightningEvents", {
       event: event.name,
@@ -4982,10 +4985,11 @@ function drawProximityWarning(agent) {
 function drawAnomaly(anomaly) {
   const stealthPhase = state.phase === "playing" || state.phase === "countdown";
   const escapeVisibility = getAnomalyEscapeVisibility(anomaly);
+  const lightningVisibility = anomaly.lightningRevealTimer > 0 ? 1 : 0;
   const alpha = playerRole === "Anomaly" && stealthPhase
-    ? (anomaly.revealed > aiAnomalyVisibleThreshold ? 1 : 0.4)
+    ? (anomaly.revealed > aiAnomalyVisibleThreshold || lightningVisibility ? 1 : 0.4)
     : stealthPhase
-      ? Math.max(anomaly.revealed, escapeVisibility)
+      ? Math.max(lightningVisibility, anomaly.revealed, escapeVisibility)
       : 0.72;
   if (alpha <= 0.02) {
     return;
