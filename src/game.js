@@ -121,7 +121,7 @@ let messageTimer = 0;
 let cameraShake = 0;
 let abilityFlash = 0;
 let lobbyState = null;
-let soundEnabled = false;
+let soundEnabled = true;
 let audioContext = null;
 let audioMaster = null;
 let audioMusic = null;
@@ -131,7 +131,7 @@ let audioManifestPromise = null;
 let globalSoundEffects = null;
 let globalSoundEffectsPromise = null;
 let globalSettingsPromise = null;
-let audioUnlockPending = false;
+let audioUnlockPending = true;
 const audioBuffers = new Map();
 const audioBufferPromises = new Map();
 const missingAudioAssets = new Set();
@@ -147,6 +147,14 @@ const audioVolumes = {
   music: 0.72,
   sfx: 0.88
 };
+const proceduralMusic = {
+  mode: null,
+  step: 0,
+  nextStepTime: 0,
+  intensity: 0,
+  drone: null
+};
+let heartbeatTimer = 0;
 loadGlobalSoundEffects();
 let lastHitSound = 0;
 let currentMapName = "Observatory Annex";
@@ -166,6 +174,7 @@ let lastSignalPing = 0;
 let lastRoundSummary = null;
 let lastFeedbackEntry = null;
 let blackoutMask = null;
+let ambientMask = null;
 let batterySpawnTimer = 30;
 let builderPlaytestOptions = { freezeAnomaly: false };
 const recentNetworkEvents = [];
@@ -937,14 +946,15 @@ function beginMatch() {
   publishPresence("playing");
   publishMatchEvent("match_started", makeMatchSnapshot(), true);
   setStatus(playerRole === "Anomaly" ? "Anomaly link established" : "Investigator link established");
-  if (maps[currentMapName]?.music?.src && !soundEnabled) {
-    setStatus("Sound is off; turn on Sound to hear map music");
+  if (!soundEnabled) {
+    setStatus("Sound is off; turn on Sound in Settings to hear music");
   }
 }
 
 function endMatch(text) {
   state.phase = "ended";
   stopMapMusic();
+  stopProceduralMusic();
   stopAllLoopingSounds();
   playMapSoundCue("round_outro");
   state.stats.outcome = text;
@@ -957,6 +967,7 @@ function endMatch(text) {
   publishMatchEvent("match_ended", summary, true);
   services.network.disconnect("match ended");
   playSound(text.includes("contained") ? "win" : "lose");
+  startProceduralMusic("menu");
   setStatus(text);
 }
 
@@ -1004,6 +1015,8 @@ function update(dt) {
     lastSignalPing = performance.now();
     playSound("signal");
   }
+  updateProximityAudio(dt);
+  updateMusicIntensity(signal);
   if (arenaEventCooldown <= 0) {
     triggerArenaEvent();
     setArenaEventCooldown(randomRange(18, 36));
@@ -2989,13 +3002,14 @@ function angleDelta(a, b) {
 
 function draw() {
   const viewport = getCanvasViewport();
-  const shake = !reduceMotion && cameraShake > 0 ? cameraShake * 18 : 0;
+  const shake = !reduceMotion && cameraShake > 0 ? cameraShake * cameraShake * 22 : 0;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
   ctx.translate(viewport.x, viewport.y);
   ctx.scale(viewport.scale, viewport.scale);
   if (shake) {
-    ctx.translate((visualRandom() - 0.5) * shake, (visualRandom() - 0.5) * shake);
+    const wobble = performance.now() * 0.055;
+    ctx.translate(Math.sin(wobble * 1.9) * shake, Math.cos(wobble * 2.4) * shake * 0.7);
   }
   drawWorld();
   drawLighting();
@@ -3744,11 +3758,103 @@ function drawLightingWashes(targetCtx = ctx) {
 }
 
 function drawAmbientDarkness(targetCtx = ctx) {
-  targetCtx.save();
-  targetCtx.globalCompositeOperation = "multiply";
-  targetCtx.fillStyle = state.blackout > 0 && playerRole === "Anomaly" ? "rgba(0, 0, 0, 0.48)" : "rgba(0, 0, 0, 0.34)";
-  targetCtx.fillRect(0, 0, world.width, world.height);
-  targetCtx.restore();
+  const inRound = state.phase === "playing" || state.phase === "countdown";
+  let darkness = state.blackout > 0 && playerRole === "Anomaly" ? 0.62 : inRound ? 0.5 : 0.3;
+  if (highContrast) {
+    darkness = Math.max(0.18, darkness - 0.16);
+  }
+  if (lightning > 0) {
+    darkness *= Math.max(0.2, 1 - lightning * 1.1);
+  }
+  if (!ambientMask) {
+    ambientMask = createTextureCanvas(world.width, world.height);
+  }
+  const maskCtx = ambientMask?.getContext?.("2d");
+  if (!maskCtx) {
+    targetCtx.save();
+    targetCtx.globalCompositeOperation = "multiply";
+    targetCtx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+    targetCtx.fillRect(0, 0, world.width, world.height);
+    targetCtx.restore();
+    return;
+  }
+
+  maskCtx.save();
+  maskCtx.globalCompositeOperation = "source-over";
+  maskCtx.clearRect(0, 0, world.width, world.height);
+  maskCtx.fillStyle = `rgba(3, 7, 16, ${darkness})`;
+  maskCtx.fillRect(0, 0, world.width, world.height);
+  const vignette = maskCtx.createRadialGradient(
+    world.width / 2,
+    world.height / 2,
+    world.height * 0.42,
+    world.width / 2,
+    world.height / 2,
+    world.width * 0.62
+  );
+  vignette.addColorStop(0, "rgba(1, 3, 9, 0)");
+  vignette.addColorStop(1, `rgba(1, 3, 9, ${0.34 + darkness * 0.3})`);
+  maskCtx.fillStyle = vignette;
+  maskCtx.fillRect(0, 0, world.width, world.height);
+
+  maskCtx.globalCompositeOperation = "destination-out";
+  for (const agent of getInvestigators()) {
+    const downed = agent.resolve <= 0;
+    carveAmbientGlow(maskCtx, agent.x, agent.y, downed ? 74 : 132, downed ? 0.5 : 0.78);
+    if (!downed && agent.lightOn) {
+      carveAmbientFlashlight(maskCtx, agent);
+    }
+  }
+  for (const battery of state.batteries) {
+    if (battery.active) {
+      carveAmbientGlow(maskCtx, battery.x, battery.y, 66, 0.6);
+    }
+  }
+  if (playerRole === "Anomaly" && inRound) {
+    carveAmbientGlow(maskCtx, state.anomaly.x, state.anomaly.y, 120, 0.62);
+  }
+  maskCtx.restore();
+
+  targetCtx.drawImage(ambientMask, 0, 0);
+}
+
+function carveAmbientGlow(maskCtx, x, y, radius, strength) {
+  const glow = maskCtx.createRadialGradient(x, y, radius * 0.12, x, y, radius);
+  glow.addColorStop(0, `rgba(255, 255, 255, ${strength})`);
+  glow.addColorStop(0.55, `rgba(255, 255, 255, ${strength * 0.45})`);
+  glow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  maskCtx.fillStyle = glow;
+  maskCtx.beginPath();
+  maskCtx.arc(x, y, radius, 0, Math.PI * 2);
+  maskCtx.fill();
+}
+
+function carveAmbientFlashlight(maskCtx, agent) {
+  const range = getFlashlightBeamRange(agent);
+  if (range <= 0) {
+    return;
+  }
+  const origin = getInvestigatorFlashlightOrigin(agent);
+  const points = getFlashlightRayPoints(agent, origin, range * 1.12, GameBalance.tracker.flashlightBeamAngleRadians * 1.18);
+  if (points.length < 2) {
+    return;
+  }
+  maskCtx.save();
+  maskCtx.beginPath();
+  maskCtx.moveTo(origin.x, origin.y);
+  for (const point of points) {
+    maskCtx.lineTo(point.x, point.y);
+  }
+  maskCtx.closePath();
+  maskCtx.clip();
+  const beam = maskCtx.createRadialGradient(origin.x, origin.y, 14, origin.x, origin.y, range * 1.12);
+  beam.addColorStop(0, "rgba(255, 255, 255, 0.96)");
+  beam.addColorStop(0.5, "rgba(255, 255, 255, 0.8)");
+  beam.addColorStop(0.85, "rgba(255, 255, 255, 0.34)");
+  beam.addColorStop(1, "rgba(255, 255, 255, 0)");
+  maskCtx.fillStyle = beam;
+  maskCtx.fillRect(origin.x - range * 1.2, origin.y - range * 1.2, range * 2.4, range * 2.4);
+  maskCtx.restore();
 }
 
 function drawFlashlightIllumination(agent, range, targetCtx = ctx) {
@@ -3773,6 +3879,8 @@ function drawFlashlightIllumination(agent, range, targetCtx = ctx) {
   targetCtx.clip();
 
   targetCtx.globalCompositeOperation = "screen";
+  const flicker = 0.92 + Math.sin(performance.now() * 0.021 + agent.x * 0.6) * 0.05 + visualRandom() * 0.03;
+  targetCtx.globalAlpha = clamp(flicker, 0.82, 1);
   const spill = targetCtx.createRadialGradient(origin.x, origin.y, 12, origin.x, origin.y, range);
   spill.addColorStop(0, "rgba(255, 250, 232, 0.44)");
   spill.addColorStop(0.22, "rgba(255, 238, 192, 0.26)");
@@ -6681,13 +6789,16 @@ function toggleSound() {
     audioUnlockPending = true;
     if (ensureAudio()) {
       setStatus(`Sound on (${audioContext?.state ?? "pending"})`);
-      playSound("audio_test");
+      audioUnlockPending = false;
       if (state.phase === "playing") {
         startMapMusic();
+      } else {
+        startProceduralMusic("menu");
       }
     }
   } else {
     stopMapMusic();
+    stopProceduralMusic();
     stopAllLoopingSounds();
     setStatus("Sound off");
   }
@@ -6957,8 +7068,46 @@ function playGeneratedSound(type) {
   }
   if (type === "ghost_damage") {
     playTone({ frequency: 920 + visualRandom() * 120, endFrequency: 540, duration: 0.105, wave: "sawtooth", volume: 0.036, startTime: now });
+    playTone({ frequency: 1840 + visualRandom() * 240, endFrequency: 1080, duration: 0.08, wave: "sine", volume: 0.018, startTime: now + 0.01 });
     playNoise({ startTime: now, duration: 0.11, volume: 0.03, highpass: 900, lowpass: 3600 });
     return 0.11;
+  }
+  if (type === "lightning") {
+    playNoise({ startTime: now, duration: 0.16, volume: 0.11, highpass: 1600, lowpass: 9000 });
+    playNoise({ startTime: now + 0.05, duration: 1.3, volume: 0.085, highpass: 60, lowpass: 420, fadeIn: 0.02 });
+    playTone({ frequency: 70, endFrequency: 36, duration: 1.1, wave: "sine", volume: 0.09, startTime: now + 0.04 });
+    return 1.3;
+  }
+  if (type === "win") {
+    playTone({ frequency: 392, duration: 0.18, wave: "triangle", volume: 0.085, startTime: now });
+    playTone({ frequency: 494, duration: 0.18, wave: "triangle", volume: 0.085, startTime: now + 0.14 });
+    playTone({ frequency: 587.33, duration: 0.22, wave: "triangle", volume: 0.09, startTime: now + 0.28 });
+    playTone({ frequency: 784, duration: 0.5, wave: "triangle", volume: 0.095, startTime: now + 0.42 });
+    playTone({ frequency: 392, duration: 0.5, wave: "sine", volume: 0.06, startTime: now + 0.42 });
+    return 0.95;
+  }
+  if (type === "lose") {
+    playTone({ frequency: 220, endFrequency: 218, duration: 0.34, wave: "sawtooth", volume: 0.055, startTime: now });
+    playTone({ frequency: 207.65, endFrequency: 206, duration: 0.34, wave: "sawtooth", volume: 0.055, startTime: now + 0.3 });
+    playTone({ frequency: 110, endFrequency: 54, duration: 0.9, wave: "triangle", volume: 0.08, startTime: now + 0.6 });
+    playNoise({ startTime: now + 0.6, duration: 0.9, volume: 0.03, highpass: 80, lowpass: 600, fadeIn: 0.2 });
+    return 1.5;
+  }
+  if (type === "downed") {
+    playTone({ frequency: 280, endFrequency: 130, duration: 0.3, wave: "triangle", volume: 0.075, startTime: now });
+    playTone({ frequency: 140, endFrequency: 70, duration: 0.34, wave: "sine", volume: 0.06, startTime: now + 0.07 });
+    return 0.4;
+  }
+  if (type === "revive") {
+    playTone({ frequency: 440, duration: 0.12, wave: "triangle", volume: 0.06, startTime: now });
+    playTone({ frequency: 587.33, duration: 0.14, wave: "triangle", volume: 0.07, startTime: now + 0.1 });
+    playTone({ frequency: 880, duration: 0.2, wave: "sine", volume: 0.055, startTime: now + 0.2 });
+    return 0.4;
+  }
+  if (type === "pickup") {
+    playTone({ frequency: 660, endFrequency: 990, duration: 0.09, wave: "sine", volume: 0.07, startTime: now });
+    playTone({ frequency: 1320, duration: 0.1, wave: "sine", volume: 0.04, startTime: now + 0.07 });
+    return 0.17;
   }
   const osc = audioContext.createOscillator();
   const gain = audioContext.createGain();
@@ -7272,10 +7421,12 @@ function startMapMusic() {
   }
   const track = maps[currentMapName]?.music;
   const src = track?.src;
-  if (!src) {
+  if (!src || missingAudioAssets.has(src)) {
     stopMapMusic();
+    startProceduralMusic("round");
     return;
   }
+  stopProceduralMusic();
   const trackVolume = getMapMusicVolume(track);
   if (currentMusicSource && currentMusicTrackSrc === src) {
     currentMusicGain?.gain.setTargetAtTime(trackVolume, audioContext.currentTime, 0.025);
@@ -7302,7 +7453,7 @@ function startMapMusic() {
     })
     .catch(() => {
       if (requestedMusicTrackSrc === src) {
-        setStatus("Map music could not be loaded");
+        startProceduralMusic("round");
       }
     });
 }
@@ -7407,7 +7558,7 @@ function playTone({ frequency, endFrequency = frequency, duration, wave = "sine"
   osc.stop(startTime + duration + 0.02);
 }
 
-function playNoise({ startTime = audioContext.currentTime, duration = 0.12, volume = 0.02, highpass = 120, lowpass = 5000, fadeIn = 0.006 }) {
+function playNoise({ startTime = audioContext.currentTime, duration = 0.12, volume = 0.02, highpass = 120, lowpass = 5000, fadeIn = 0.006, bus = "sfx" }) {
   const sampleRate = audioContext.sampleRate;
   const frameCount = Math.max(1, Math.floor(sampleRate * duration));
   const buffer = audioContext.createBuffer(1, frameCount, sampleRate);
@@ -7427,7 +7578,7 @@ function playNoise({ startTime = audioContext.currentTime, duration = 0.12, volu
   gain.gain.setValueAtTime(0.0001, startTime);
   gain.gain.exponentialRampToValueAtTime(volume, startTime + Math.max(0.004, fadeIn));
   gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-  source.connect(high).connect(low).connect(gain).connect(getAudioDestination("sfx"));
+  source.connect(high).connect(low).connect(gain).connect(getAudioDestination(bus));
   source.start(startTime);
   source.stop(startTime + duration + 0.02);
 }
@@ -7439,14 +7590,224 @@ function getAudioDestination(bus = "sfx") {
   return audioSfx ?? audioMaster ?? audioContext.destination;
 }
 
+const musicNotes = {
+  D2: 73.42,
+  F2: 87.31,
+  G2: 98,
+  A1: 55,
+  A2: 110,
+  C2: 65.41,
+  D3: 146.83,
+  D4: 293.66,
+  F4: 349.23,
+  A4: 440,
+  D5: 587.33,
+  E5: 659.25,
+  F5: 698.46,
+  G5: 783.99,
+  A5: 880,
+  C6: 1046.5
+};
+const roundBassPattern = ["D2", null, null, "D2", "A1", null, "C2", null, "D2", null, null, "D2", "F2", null, "C2", "A1"];
+const motifPool = ["D5", "F5", "A5", "E5", "G5", "C6", "A4", "D5"];
+
+function startProceduralMusic(mode) {
+  if (!soundEnabled || !audioContext || audioUnlockPending) {
+    return;
+  }
+  if (proceduralMusic.mode === mode) {
+    return;
+  }
+  stopProceduralMusic();
+  proceduralMusic.mode = mode;
+  proceduralMusic.step = 0;
+  proceduralMusic.intensity = 0;
+  proceduralMusic.nextStepTime = audioContext.currentTime + 0.1;
+  startMusicDrone(mode);
+}
+
+function stopProceduralMusic() {
+  proceduralMusic.mode = null;
+  if (proceduralMusic.drone) {
+    const { oscillators, gain } = proceduralMusic.drone;
+    const now = audioContext?.currentTime ?? 0;
+    gain?.gain.setTargetAtTime(0.0001, now, 0.2);
+    for (const osc of oscillators) {
+      try {
+        osc.stop(now + 1.2);
+      } catch {
+        // Oscillator may already be stopped.
+      }
+    }
+    proceduralMusic.drone = null;
+  }
+}
+
+function startMusicDrone(mode) {
+  const now = audioContext.currentTime;
+  const gain = audioContext.createGain();
+  const filter = audioContext.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(mode === "round" ? 320 : 210, now);
+  filter.Q.setValueAtTime(0.8, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.setTargetAtTime(mode === "round" ? 0.052 : 0.04, now, 1.4);
+  const oscillators = [];
+  const tunings = [
+    { frequency: musicNotes.D2, type: "sawtooth", detune: 0 },
+    { frequency: musicNotes.D2, type: "sawtooth", detune: 9 },
+    { frequency: musicNotes.A2, type: "triangle", detune: -6 }
+  ];
+  for (const tuning of tunings) {
+    const osc = audioContext.createOscillator();
+    osc.type = tuning.type;
+    osc.frequency.setValueAtTime(tuning.frequency, now);
+    osc.detune.setValueAtTime(tuning.detune, now);
+    osc.connect(filter);
+    osc.start(now);
+    oscillators.push(osc);
+  }
+  filter.connect(gain).connect(getAudioDestination("music"));
+  proceduralMusic.drone = { oscillators, gain, filter };
+}
+
+function updateProceduralMusic() {
+  if (!proceduralMusic.mode || !soundEnabled || !audioContext || audioContext.state !== "running") {
+    return;
+  }
+  const stepSeconds = proceduralMusic.mode === "round" ? 60 / 96 / 2 : 60 / 60 / 2;
+  if (proceduralMusic.nextStepTime < audioContext.currentTime - 0.4) {
+    proceduralMusic.nextStepTime = audioContext.currentTime + 0.05;
+  }
+  while (proceduralMusic.nextStepTime < audioContext.currentTime + 0.3) {
+    scheduleMusicStep(proceduralMusic.step, proceduralMusic.nextStepTime);
+    proceduralMusic.step += 1;
+    proceduralMusic.nextStepTime += stepSeconds;
+  }
+  if (proceduralMusic.drone) {
+    const intensity = proceduralMusic.intensity;
+    const baseCutoff = proceduralMusic.mode === "round" ? 320 : 210;
+    proceduralMusic.drone.filter.frequency.setTargetAtTime(baseCutoff + intensity * 680, audioContext.currentTime, 0.6);
+  }
+}
+
+function scheduleMusicStep(step, time) {
+  const mode = proceduralMusic.mode;
+  const intensity = proceduralMusic.intensity;
+  if (mode === "round") {
+    const bassNote = roundBassPattern[step % roundBassPattern.length];
+    if (bassNote) {
+      playMusicVoice({ frequency: musicNotes[bassNote], duration: 0.32, wave: "triangle", volume: 0.085 + intensity * 0.03, startTime: time });
+      playMusicVoice({ frequency: musicNotes[bassNote] / 2, duration: 0.3, wave: "sine", volume: 0.07, startTime: time });
+    }
+    if (step % 2 === 1 && intensity > 0.35) {
+      playMusicTick(time, 0.012 + intensity * 0.022);
+    }
+    if (step % 4 === 2 && visualRandom() < 0.34 + intensity * 0.3) {
+      const note = motifPool[Math.floor(visualRandom() * motifPool.length)];
+      playMusicBell(musicNotes[note], time, 0.034 + intensity * 0.02);
+    }
+    if (step % 32 === 0 && intensity > 0.6) {
+      playNoise({ startTime: time, duration: 1.6, volume: 0.024, highpass: 200, lowpass: 900, fadeIn: 0.7, bus: "music" });
+    }
+    return;
+  }
+  if (step % 8 === 0) {
+    playMusicVoice({ frequency: musicNotes.D2, duration: 1.4, wave: "sine", volume: 0.05, startTime: time });
+  }
+  if (step % 4 === 2 && visualRandom() < 0.3) {
+    const note = motifPool[Math.floor(visualRandom() * motifPool.length)];
+    playMusicBell(musicNotes[note], time, 0.026);
+  }
+}
+
+function playMusicVoice({ frequency, duration, wave, volume, startTime }) {
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  osc.type = wave;
+  osc.frequency.setValueAtTime(frequency, startTime);
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  osc.connect(gain).connect(getAudioDestination("music"));
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+
+function playMusicBell(frequency, startTime, volume) {
+  const decay = 1.7;
+  for (const [harmonic, level] of [[1, 1], [2.76, 0.32], [5.4, 0.12]]) {
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(frequency * harmonic, startTime);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(volume * level, startTime + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay / Math.max(1, harmonic * 0.7));
+    osc.connect(gain).connect(getAudioDestination("music"));
+    osc.start(startTime);
+    osc.stop(startTime + decay + 0.05);
+  }
+}
+
+function playMusicTick(startTime, volume) {
+  playNoise({ startTime, duration: 0.045, volume, highpass: 5200, lowpass: 9800, fadeIn: 0.004, bus: "music" });
+}
+
+function updateMusicIntensity(signal) {
+  let target = clamp(signal, 0, 1) * 0.7;
+  if (state.blackout > 0) {
+    target = Math.max(target, 0.85);
+  }
+  if (state.anomaly.revealed > 0.2) {
+    target = Math.max(target, 0.75);
+  }
+  if (state.time < 30 && state.phase === "playing") {
+    target = Math.max(target, 0.6);
+  }
+  const activeInvestigators = getInvestigators().filter((agent) => agent.resolve > 0).length;
+  if (activeInvestigators === 1) {
+    target = Math.max(target, 0.7);
+  }
+  proceduralMusic.intensity += (target - proceduralMusic.intensity) * 0.05;
+}
+
+function updateProximityAudio(dt) {
+  heartbeatTimer = Math.max(0, heartbeatTimer - dt);
+  if (!soundEnabled || !audioContext || audioContext.state !== "running") {
+    return;
+  }
+  if (playerRole !== "Investigator" || isPartyHostActive() || state.player.resolve <= 0) {
+    return;
+  }
+  const dist = distance(state.player, state.anomaly);
+  const range = proximityWarningRange * 2.1;
+  if (dist > range) {
+    return;
+  }
+  if (heartbeatTimer > 0) {
+    return;
+  }
+  const closeness = clamp(1 - dist / range, 0, 1);
+  heartbeatTimer = 1.05 - closeness * 0.62;
+  playHeartbeat(0.05 + closeness * 0.13);
+}
+
+function playHeartbeat(volume) {
+  const now = audioContext.currentTime;
+  playTone({ frequency: 62, endFrequency: 40, duration: 0.11, wave: "sine", volume, startTime: now });
+  playTone({ frequency: 54, endFrequency: 36, duration: 0.1, wave: "sine", volume: volume * 0.72, startTime: now + 0.17 });
+}
+
 function unlockAudioFromGesture() {
   if (!soundEnabled || !audioUnlockPending || !ensureAudio()) {
     return;
   }
   audioUnlockPending = false;
-  playSound("audio_test");
   if (state.phase === "playing") {
     startMapMusic();
+  } else {
+    startProceduralMusic("menu");
   }
 }
 
@@ -7469,6 +7830,7 @@ function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
   update(dt);
+  updateProceduralMusic();
   draw();
   requestAnimationFrame(loop);
 }

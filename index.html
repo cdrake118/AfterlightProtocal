@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Afterlight Protocol Prototype</title>
-    <link rel="stylesheet" href="styles.css?v=20260504-03">
+    <link rel="stylesheet" href="styles.css?v=20260610-01">
   </head>
   <body>
     <main class="shell">
@@ -12,12 +12,15 @@
         <canvas id="game" width="1280" height="720"></canvas>
         <section class="main-menu-panel" id="mainMenuPanel" aria-label="Main menu">
           <div class="main-menu-content">
+            <span class="main-menu-kicker">4 investigators vs 1 anomaly</span>
             <h1>Afterlight Protocol</h1>
-            <p>Play as a team of investigators, or the anomaly, and hunt each other!</p>
+            <p>Hunt the invisible anomaly with light, or stalk the team from the dark.</p>
             <div class="main-menu-actions">
               <button id="startBtn" class="primary-button" type="button">Start</button>
               <button id="menuHelpBtn" type="button">How to Play</button>
               <button id="settingsBtn" type="button">Settings</button>
+            </div>
+            <div class="main-menu-tools">
               <a class="menu-link" href="map-builder.html" target="_blank" rel="noreferrer">Builder</a>
               <a class="menu-link" href="sound-effects.html" target="_blank" rel="noreferrer">Sounds</a>
               <a class="menu-link" href="global-settings.html" target="_blank" rel="noreferrer">Globals</a>
@@ -289,6 +292,6 @@
         </section>
       </section>
     </main>
-    <script type="module" src="src/game.js?v=20260502-08"></script>
+    <script type="module" src="src/game.js?v=20260610-01"></script>
   </body>
 </html>

@@ -100,6 +100,14 @@ The lobby panel shows a map briefing for the selected arena event before launch.
 - `npm run input:map` generates semantic input action sets for future Steam Input manifests and platform glyph prompts.
 - Motion and contrast toggles persist through settings for playtest readability and accessibility checks.
 - Anomaly echo decoys create false reads for signal and bot aim so stealth counterplay can be tested in solo sessions.
+- The arena renders under a darkness mask; flashlight beams, live investigators, and battery pickups carve light pools, and lightning events briefly relight the whole arena. High contrast mode lifts the darkness floor.
+
+## Audio Feedback
+
+- A procedural Web Audio score plays a calm menu mood and a driving round mood; a tension parameter raises drone brightness, adds rhythm ticks, and noise swells as the anomaly applies pressure (blackouts, reveals, last-investigator stands, final 30 seconds).
+- Heartbeat thumps play for the local investigator and quicken as the anomaly closes, mirroring the phone controller's proximity haptics.
+- Phone controllers vibrate on anomaly proximity, when downed or revived, and on anomaly damage ticks for the anomaly player.
+- File-based music/SFX from the audio manifest still override synthesized cues when assets are installed.
 
 ## Progression Hooks
 

@@ -171,6 +171,7 @@ socket?.on("match:start", () => {
 });
 
 socket?.on("host:state", (state) => {
+  triggerHaptics(state);
   if (member?.role === "Anomaly" && anomalyHealth) {
     const value = Number.isFinite(state?.anomalyHealth) ? Math.max(0, Math.round(state.anomalyHealth)) : null;
     anomalyHealth.textContent = `Anomaly Stability: ${value ?? "--"}%`;
@@ -608,6 +609,54 @@ function getMiniMapImage(src) {
   image.src = src;
   miniMapImages.set(src, image);
   return image;
+}
+
+let lastHapticAt = 0;
+let lastOwnResolve = null;
+let lastAnomalyStability = null;
+
+function triggerHaptics(state) {
+  if (typeof navigator.vibrate !== "function" || !member || state?.phase !== "playing") {
+    return;
+  }
+  const now = performance.now();
+  if (member.role === "Anomaly") {
+    const stability = Number(state?.anomalyHealth);
+    if (Number.isFinite(stability)) {
+      if (lastAnomalyStability !== null && stability < lastAnomalyStability && now - lastHapticAt > 220) {
+        navigator.vibrate(55);
+        lastHapticAt = now;
+      }
+      lastAnomalyStability = stability;
+    }
+    return;
+  }
+  const me = state?.investigators?.find((agent) => agent.id === member.id);
+  if (!me) {
+    return;
+  }
+  if (lastOwnResolve !== null && me.resolve <= 0 && lastOwnResolve > 0) {
+    navigator.vibrate([140, 70, 240]);
+    lastHapticAt = now;
+  } else if (lastOwnResolve !== null && me.resolve > 0 && lastOwnResolve <= 0) {
+    navigator.vibrate([40, 40, 40, 40, 80]);
+    lastHapticAt = now;
+  }
+  lastOwnResolve = me.resolve;
+  if (me.resolve <= 0 || !state?.anomaly) {
+    return;
+  }
+  const dist = Math.hypot(me.x - state.anomaly.x, me.y - state.anomaly.y);
+  const warnRange = 220;
+  if (dist > warnRange) {
+    return;
+  }
+  const closeness = 1 - dist / warnRange;
+  const interval = 900 - closeness * 620;
+  if (now - lastHapticAt >= interval) {
+    navigator.vibrate(dist < 110 ? 75 : 35);
+    lastHapticAt = now;
+  }
 }
 
 function setJoinStatus(text) {

@@ -208,8 +208,11 @@ This runs an internet-free host/client contract check through the local loopback
 - Map-specific arena events for reveal, signal distortion, and echo misdirection.
 - Arena-event HUD countdown and lobby briefing cards for playtest readability.
 - Mock lobby flow.
+- Procedural Web Audio soundtrack with menu and round moods, a tension layer that follows anomaly pressure, and synthesized SFX for every cue (sound is on by default; file-based tracks still override when present).
+- Heartbeat proximity audio that quickens as the anomaly closes on the local investigator.
+- Dynamic darkness rendering: the arena sits in shadow while flashlight beams, player auras, and battery pickups carve light pools out of it; lightning events briefly light the whole arena.
 - Railway-ready party relay server with `/host`, `/join`, `/healthz`, `/rooms`, and `/diagnostics`.
-- Phone controller UI with joystick, role/skin selection, ready state, and private anomaly minimap.
+- Phone controller UI with joystick, role/skin selection, ready state, private anomaly minimap, and haptic feedback (proximity pulses, downed/revive buzzes, anomaly damage ticks).
 - Asset pipeline docs and atlas validation for transparent fixed-frame sprite sheets.
 - Tiled map pipeline docs and a sample manor party map import.
 - Audio manifest and pipeline docs for music/SFX replacement assets.
